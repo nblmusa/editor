@@ -13,6 +13,11 @@ export class AppComponent implements OnInit {
         editor: 50,
         viewer: 50
     };
+    languages = [
+        {id: 'html', name: 'HTML'},
+        {id: 'javascript', name: 'Javascript'},
+        {id: 'css', name: 'CSS'},
+    ];
     editorOptions = {
         value: '// First line\nfunction hello() {\n\talert(\'Hello world!\');\n}\n// Last line',
         language: 'html',
@@ -69,5 +74,9 @@ export class AppComponent implements OnInit {
         viewer.contentWindow.document.open();
         viewer.contentWindow.document.write(this.code);
         viewer.contentWindow.document.close();
+    }
+
+    changeLanguage(event) {
+        this.editorOptions = Object.assign({}, this.editorOptions, {language: event.target.value});
     }
 }

@@ -7,11 +7,18 @@
 
 <div class="container">
   <div class="navbar">
-    <button (click)="changeOrientation()"><span>Orientation</span></button>
-    <button (click)="toggleView(1)"><span>Editor</span></button>
-    <button (click)="toggleView(2)"><span>Editor / Viewer</span></button>
-    <button (click)="toggleView(3)"><span>Viewer</span></button>
-    <button (click)="run()"><span>Run</span></button>
+    <div>
+      <button (click)="changeOrientation()"><img src="assets/images/orientation.png" /></button>
+      <button (click)="toggleView(1)"><img src="assets/images/pane-side-2.png" /></button>
+      <button (click)="toggleView(2)"><img src="assets/images/pane-both.png" /></button>
+      <button (click)="toggleView(3)"><img src="assets/images/pane-side-2.png" style="transform: scaleX(-1);" /></button>
+      <button (click)="run()"><span>Run</span></button>
+    </div>
+    <div class="dropdown dropdown-dark">
+      <select name="two" class="dropdown-select" (change)="changeLanguage($event)">
+        <option *ngFor="let language of languages" value="{{language.id}}">{{language.name}}</option>
+      </select>
+    </div>
   </div>
     <split [direction]="direction" [useTransition]="false" [gutterColor]="'#424242'" order="1">
       <split-area [size]="size.editor">
