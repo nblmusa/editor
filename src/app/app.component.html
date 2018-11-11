@@ -22,7 +22,7 @@
   </div>
     <split [direction]="direction" [useTransition]="false" [gutterColor]="'#424242'" order="1">
       <split-area [size]="size.editor">
-        <ngx-monaco-editor class="code-editor" [options]="editorOptions" [(ngModel)]="code"></ngx-monaco-editor>
+        <ngx-monaco-editor class="code-editor" [options]="editorOptions" [(ngModel)]="code" (ngModelChange)="updateView()"></ngx-monaco-editor>
       </split-area>
       <split-area [size]="size.viewer" order="2">
         <iframe id="viewer" class="viewer" style="height:100%;width: 100%; border: 0;"></iframe>

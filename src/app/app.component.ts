@@ -76,6 +76,10 @@ export class AppComponent implements OnInit {
         viewer.contentWindow.document.close();
     }
 
+    updateView() {
+        this.run();
+    }
+
     changeLanguage(event) {
         this.editorOptions = Object.assign({}, this.editorOptions, {language: event.target.value});
     }
