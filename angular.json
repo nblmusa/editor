@@ -3,7 +3,7 @@
   "version": 1,
   "newProjectRoot": "projects",
   "projects": {
-    "editor-v2": {
+    "editor": {
       "projectType": "application",
       "schematics": {
         "@schematics/angular:component": {
@@ -20,7 +20,7 @@
         "build": {
           "builder": "@angular-devkit/build-angular:browser",
           "options": {
-            "outputPath": "dist/editor-v2",
+            "outputPath": "dist/editor",
             "index": "src/index.html",
             "main": "src/main.ts",
             "polyfills": "src/polyfills.ts",
@@ -73,10 +73,10 @@
           "builder": "@angular-devkit/build-angular:dev-server",
           "configurations": {
             "production": {
-              "browserTarget": "editor-v2:build:production"
+              "browserTarget": "editor:build:production"
             },
             "development": {
-              "browserTarget": "editor-v2:build:development"
+              "browserTarget": "editor:build:development"
             }
           },
           "defaultConfiguration": "development"
@@ -84,7 +84,7 @@
         "extract-i18n": {
           "builder": "@angular-devkit/build-angular:extract-i18n",
           "options": {
-            "browserTarget": "editor-v2:build"
+            "browserTarget": "editor:build"
           }
         },
         "test": {
@@ -108,5 +108,5 @@
       }
     }
   },
-  "defaultProject": "editor-v2"
+  "defaultProject": "editor"
 }
