@@ -17,33 +17,33 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-import './list.css';
-import { dispose, DisposableStore } from '../../../common/lifecycle.js';
-import { isNumber } from '../../../common/types.js';
-import { range, binarySearch, firstOrDefault } from '../../../common/arrays.js';
-import { memoize } from '../../../common/decorators.js';
-import * as platform from '../../../common/platform.js';
-import { Gesture } from '../../touch.js';
-import { StandardKeyboardEvent } from '../../keyboardEvent.js';
-import { Event, Emitter, EventBufferer } from '../../../common/event.js';
+import { createStyleSheet } from '../../dom.js';
 import { DomEmitter, stopEvent } from '../../event.js';
+import { StandardKeyboardEvent } from '../../keyboardEvent.js';
+import { Gesture } from '../../touch.js';
+import { alert } from '../aria/aria.js';
+import { CombinedSpliceable } from './splice.js';
+import { binarySearch, firstOrDefault, range } from '../../../common/arrays.js';
+import { timeout } from '../../../common/async.js';
+import { Color } from '../../../common/color.js';
+import { memoize } from '../../../common/decorators.js';
+import { Emitter, Event, EventBufferer } from '../../../common/event.js';
+import { matchesPrefix } from '../../../common/filters.js';
+import { DisposableStore, dispose } from '../../../common/lifecycle.js';
+import { clamp } from '../../../common/numbers.js';
+import { mixin } from '../../../common/objects.js';
+import * as platform from '../../../common/platform.js';
+import { isNumber } from '../../../common/types.js';
+import './list.css';
 import { ListError } from './list.js';
 import { ListView } from './listView.js';
-import { Color } from '../../../common/color.js';
-import { mixin } from '../../../common/objects.js';
-import { CombinedSpliceable } from './splice.js';
-import { clamp } from '../../../common/numbers.js';
-import { matchesPrefix } from '../../../common/filters.js';
-import { alert } from '../aria/aria.js';
-import { createStyleSheet } from '../../dom.js';
-import { timeout } from '../../../common/async.js';
 class TraitRenderer {
     constructor(trait) {
         this.trait = trait;
         this.renderedElements = [];
     }
     get templateId() {
-        return `template:${this.trait.trait}`;
+        return `template:${this.trait.name}`;
     }
     renderTemplate(container) {
         return container;
@@ -100,7 +100,7 @@ class Trait {
         this._onChange = new Emitter();
         this.onChange = this._onChange.event;
     }
-    get trait() { return this._trait; }
+    get name() { return this._trait; }
     get renderer() {
         return new TraitRenderer(this);
     }
@@ -226,7 +226,7 @@ class KeyboardController {
         this.onKeyDown.filter(e => e.keyCode === 12 /* PageDown */).on(this.onPageDownArrow, this, this.disposables);
         this.onKeyDown.filter(e => e.keyCode === 9 /* Escape */).on(this.onEscape, this, this.disposables);
         if (options.multipleSelectionSupport !== false) {
-            this.onKeyDown.filter(e => (platform.isMacintosh ? e.metaKey : e.ctrlKey) && e.keyCode === 31 /* KEY_A */).on(this.onCtrlA, this, this.multipleSelectionDisposables);
+            this.onKeyDown.filter(e => (platform.isMacintosh ? e.metaKey : e.ctrlKey) && e.keyCode === 31 /* KeyA */).on(this.onCtrlA, this, this.multipleSelectionDisposables);
         }
     }
     get onKeyDown() {
@@ -238,7 +238,7 @@ class KeyboardController {
         if (optionsUpdate.multipleSelectionSupport !== undefined) {
             this.multipleSelectionDisposables.clear();
             if (optionsUpdate.multipleSelectionSupport) {
-                this.onKeyDown.filter(e => (platform.isMacintosh ? e.metaKey : e.ctrlKey) && e.keyCode === 31 /* KEY_A */).on(this.onCtrlA, this, this.multipleSelectionDisposables);
+                this.onKeyDown.filter(e => (platform.isMacintosh ? e.metaKey : e.ctrlKey) && e.keyCode === 31 /* KeyA */).on(this.onCtrlA, this, this.multipleSelectionDisposables);
             }
         }
     }
@@ -251,34 +251,43 @@ class KeyboardController {
         e.preventDefault();
         e.stopPropagation();
         this.list.focusPrevious(1, false, e.browserEvent);
-        this.list.reveal(this.list.getFocus()[0]);
+        const el = this.list.getFocus()[0];
+        this.list.setAnchor(el);
+        this.list.reveal(el);
         this.view.domNode.focus();
     }
     onDownArrow(e) {
         e.preventDefault();
         e.stopPropagation();
         this.list.focusNext(1, false, e.browserEvent);
-        this.list.reveal(this.list.getFocus()[0]);
+        const el = this.list.getFocus()[0];
+        this.list.setAnchor(el);
+        this.list.reveal(el);
         this.view.domNode.focus();
     }
     onPageUpArrow(e) {
         e.preventDefault();
         e.stopPropagation();
         this.list.focusPreviousPage(e.browserEvent);
-        this.list.reveal(this.list.getFocus()[0]);
+        const el = this.list.getFocus()[0];
+        this.list.setAnchor(el);
+        this.list.reveal(el);
         this.view.domNode.focus();
     }
     onPageDownArrow(e) {
         e.preventDefault();
         e.stopPropagation();
         this.list.focusNextPage(e.browserEvent);
-        this.list.reveal(this.list.getFocus()[0]);
+        const el = this.list.getFocus()[0];
+        this.list.setAnchor(el);
+        this.list.reveal(el);
         this.view.domNode.focus();
     }
     onCtrlA(e) {
         e.preventDefault();
         e.stopPropagation();
         this.list.setSelection(range(this.list.length), e.browserEvent);
+        this.list.setAnchor(undefined);
         this.view.domNode.focus();
     }
     onEscape(e) {
@@ -286,6 +295,7 @@ class KeyboardController {
             e.preventDefault();
             e.stopPropagation();
             this.list.setSelection([], e.browserEvent);
+            this.list.setAnchor(undefined);
             this.view.domNode.focus();
         }
     }
@@ -307,10 +317,10 @@ export const DefaultKeyboardNavigationDelegate = new class {
         if (event.ctrlKey || event.metaKey || event.altKey) {
             return false;
         }
-        return (event.keyCode >= 31 /* KEY_A */ && event.keyCode <= 56 /* KEY_Z */)
-            || (event.keyCode >= 21 /* KEY_0 */ && event.keyCode <= 30 /* KEY_9 */)
-            || (event.keyCode >= 93 /* NUMPAD_0 */ && event.keyCode <= 102 /* NUMPAD_9 */)
-            || (event.keyCode >= 80 /* US_SEMICOLON */ && event.keyCode <= 90 /* US_QUOTE */);
+        return (event.keyCode >= 31 /* KeyA */ && event.keyCode <= 56 /* KeyZ */)
+            || (event.keyCode >= 21 /* Digit0 */ && event.keyCode <= 30 /* Digit9 */)
+            || (event.keyCode >= 93 /* Numpad0 */ && event.keyCode <= 102 /* Numpad9 */)
+            || (event.keyCode >= 80 /* Semicolon */ && event.keyCode <= 90 /* Quote */);
     }
 };
 class TypeLabelController {
@@ -349,7 +359,7 @@ class TypeLabelController {
             .filter(() => this.automaticKeyboardNavigation || this.triggered)
             .map(event => new StandardKeyboardEvent(event))
             .filter(e => this.delegate.mightProducePrintableCharacter(e))
-            .forEach(e => { e.stopPropagation(); e.preventDefault(); })
+            .forEach(e => e.preventDefault())
             .map(event => event.browserEvent.key)
             .event;
         const onClear = Event.debounce(onChar, () => null, 800);
@@ -371,7 +381,7 @@ class TypeLabelController {
         var _a;
         const focus = this.list.getFocus();
         if (focus.length > 0 && focus[0] === this.previouslyFocused) {
-            // List: re-anounce element on typing end since typed keys will interupt aria label of focused element
+            // List: re-announce element on typing end since typed keys will interrupt aria label of focused element
             // Do not announce if there was a focus change at the end to prevent duplication https://github.com/microsoft/vscode/issues/95961
             const ariaLabel = (_a = this.list.options.accessibilityProvider) === null || _a === void 0 ? void 0 : _a.getAriaLabel(this.list.element(focus[0]));
             if (ariaLabel) {
@@ -668,6 +678,7 @@ export class DefaultStyleController {
             content.push(`
 				.monaco-drag-image,
 				.monaco-list${suffix}:focus .monaco-list-row.focused { outline: 1px solid ${styles.listFocusOutline}; outline-offset: -1px; }
+				.monaco-workbench.context-menu-visible .monaco-list${suffix}.last-focused .monaco-list-row.focused { outline: 1px solid ${styles.listFocusOutline}; outline-offset: -1px; }
 			`);
         }
         if (styles.listInactiveFocusOutline) {
@@ -702,6 +713,15 @@ export class DefaultStyleController {
 					border-color: ${styles.tableColumnsBorder};
 			}`);
         }
+        if (styles.tableOddRowsBackgroundColor) {
+            content.push(`
+				.monaco-table .monaco-list-row[data-parity=odd]:not(.focused):not(.selected):not(:hover) .monaco-table-tr,
+				.monaco-table .monaco-list:not(:focus) .monaco-list-row[data-parity=odd].focused:not(.selected):not(:hover) .monaco-table-tr,
+				.monaco-table .monaco-list:not(.focused) .monaco-list-row[data-parity=odd].focused:not(.selected):not(:hover) .monaco-table-tr {
+					background-color: ${styles.tableOddRowsBackgroundColor};
+				}
+			`);
+        }
         this.styleElement.textContent = content.join('\n');
     }
 }
@@ -717,7 +737,8 @@ const defaultStyles = {
     listHoverBackground: Color.fromHex('#2A2D2E'),
     listDropBackground: Color.fromHex('#383B3D'),
     treeIndentGuidesStroke: Color.fromHex('#a9a9a9'),
-    tableColumnsBorder: Color.fromHex('#cccccc').transparent(0.2)
+    tableColumnsBorder: Color.fromHex('#cccccc').transparent(0.2),
+    tableOddRowsBackgroundColor: Color.fromHex('#cccccc').transparent(0.04)
 };
 const DefaultOptions = {
     keyboardSupport: true,
@@ -907,6 +928,21 @@ class ListViewDragAndDrop {
         this.dnd.drop(data, targetElement, targetIndex, originalEvent);
     }
 }
+/**
+ * The {@link List} is a virtual scrolling widget, built on top of the {@link ListView}
+ * widget.
+ *
+ * Features:
+ * - Customizable keyboard and mouse support
+ * - Element traits: focus, selection, achor
+ * - Accessibility support
+ * - Touch support
+ * - Performant template-based rendering
+ * - Horizontal scrolling
+ * - Variable element height support
+ * - Dynamic element height support
+ * - Drag-and-drop support
+ */
 export class List {
     constructor(user, container, virtualDelegate, renderers, _options = DefaultOptions) {
         var _a;

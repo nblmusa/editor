@@ -1,3 +1,8 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+import { equals } from '../../base/common/objects.js';
 /**
  * Vertical Lane in the overview ruler of the editor.
  */
@@ -16,6 +21,13 @@ export var MinimapPosition;
     MinimapPosition[MinimapPosition["Inline"] = 1] = "Inline";
     MinimapPosition[MinimapPosition["Gutter"] = 2] = "Gutter";
 })(MinimapPosition || (MinimapPosition = {}));
+export var InjectedTextCursorStops;
+(function (InjectedTextCursorStops) {
+    InjectedTextCursorStops[InjectedTextCursorStops["Both"] = 0] = "Both";
+    InjectedTextCursorStops[InjectedTextCursorStops["Right"] = 1] = "Right";
+    InjectedTextCursorStops[InjectedTextCursorStops["Left"] = 2] = "Left";
+    InjectedTextCursorStops[InjectedTextCursorStops["None"] = 3] = "None";
+})(InjectedTextCursorStops || (InjectedTextCursorStops = {}));
 export class TextModelResolvedOptions {
     /**
      * @internal
@@ -27,6 +39,7 @@ export class TextModelResolvedOptions {
         this.insertSpaces = Boolean(src.insertSpaces);
         this.defaultEOL = src.defaultEOL | 0;
         this.trimAutoWhitespace = Boolean(src.trimAutoWhitespace);
+        this.bracketPairColorizationOptions = src.bracketPairColorizationOptions;
     }
     /**
      * @internal
@@ -36,7 +49,8 @@ export class TextModelResolvedOptions {
             && this.indentSize === other.indentSize
             && this.insertSpaces === other.insertSpaces
             && this.defaultEOL === other.defaultEOL
-            && this.trimAutoWhitespace === other.trimAutoWhitespace);
+            && this.trimAutoWhitespace === other.trimAutoWhitespace
+            && equals(this.bracketPairColorizationOptions, other.bracketPairColorizationOptions));
     }
     /**
      * @internal
@@ -76,10 +90,26 @@ export class ValidAnnotatedEditOperation {
 /**
  * @internal
  */
+export class SearchData {
+    constructor(regex, wordSeparators, simpleSearch) {
+        this.regex = regex;
+        this.wordSeparators = wordSeparators;
+        this.simpleSearch = simpleSearch;
+    }
+}
+/**
+ * @internal
+ */
 export class ApplyEditsResult {
     constructor(reverseEdits, changes, trimAutoWhitespaceLineNumbers) {
         this.reverseEdits = reverseEdits;
         this.changes = changes;
         this.trimAutoWhitespaceLineNumbers = trimAutoWhitespaceLineNumbers;
     }
+}
+/**
+ * @internal
+ */
+export function shouldSynchronizeModel(model) {
+    return (!model.isTooLargeForSyncing() && !model.isForSimpleWidget);
 }

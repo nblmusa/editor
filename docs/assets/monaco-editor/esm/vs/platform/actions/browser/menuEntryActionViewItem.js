@@ -20,24 +20,24 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-import './menuEntryActionViewItem.css';
-import { addDisposableListener, asCSSUrl, ModifierKeyEmitter, append, EventType, $, prepend } from '../../../base/browser/dom.js';
-import { ActionRunner, Separator, SubmenuAction } from '../../../base/common/actions.js';
-import { toDisposable, MutableDisposable, DisposableStore } from '../../../base/common/lifecycle.js';
-import { localize } from '../../../nls.js';
-import { MenuItemAction, SubmenuItemAction, IMenuService } from '../common/actions.js';
-import { IContextMenuService } from '../../contextview/browser/contextView.js';
-import { IKeybindingService } from '../../keybinding/common/keybinding.js';
-import { UILabelProvider } from '../../../base/common/keybindingLabels.js';
-import { INotificationService } from '../../notification/common/notification.js';
-import { ThemeIcon } from '../../theme/common/themeService.js';
+import { $, addDisposableListener, append, asCSSUrl, EventType, ModifierKeyEmitter, prepend } from '../../../base/browser/dom.js';
+import { StandardKeyboardEvent } from '../../../base/browser/keyboardEvent.js';
 import { ActionViewItem, BaseActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import { DropdownMenuActionViewItem } from '../../../base/browser/ui/dropdown/dropdownActionViewItem.js';
-import { isWindows, isLinux, OS } from '../../../base/common/platform.js';
-import { IInstantiationService } from '../../instantiation/common/instantiation.js';
+import { ActionRunner, Separator, SubmenuAction } from '../../../base/common/actions.js';
+import { UILabelProvider } from '../../../base/common/keybindingLabels.js';
+import { DisposableStore, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { isLinux, isWindows, OS } from '../../../base/common/platform.js';
+import './menuEntryActionViewItem.css';
+import { localize } from '../../../nls.js';
+import { IMenuService, MenuItemAction, SubmenuItemAction } from '../common/actions.js';
 import { IContextKeyService } from '../../contextkey/common/contextkey.js';
-import { StandardKeyboardEvent } from '../../../base/browser/keyboardEvent.js';
+import { IContextMenuService } from '../../contextview/browser/contextView.js';
+import { IInstantiationService } from '../../instantiation/common/instantiation.js';
+import { IKeybindingService } from '../../keybinding/common/keybinding.js';
+import { INotificationService } from '../../notification/common/notification.js';
 import { IStorageService } from '../../storage/common/storage.js';
+import { ThemeIcon } from '../../theme/common/themeService.js';
 export function createAndFillInActionBarActions(menu, options, target, primaryGroup, primaryMaxCount, shouldInlineSubmenu, useSeparatorsInPrimaryActions) {
     const groups = menu.getActions(options);
     const isPrimaryAction = typeof primaryGroup === 'string' ? (actionGroup) => actionGroup === primaryGroup : primaryGroup;
@@ -246,11 +246,13 @@ MenuEntryActionViewItem = __decorate([
 ], MenuEntryActionViewItem);
 export { MenuEntryActionViewItem };
 let SubmenuEntryActionViewItem = class SubmenuEntryActionViewItem extends DropdownMenuActionViewItem {
-    constructor(action, contextMenuService) {
-        super(action, { getActions: () => action.actions }, contextMenuService, {
-            menuAsChild: true,
-            classNames: ThemeIcon.isThemeIcon(action.item.icon) ? ThemeIcon.asClassName(action.item.icon) : undefined,
+    constructor(action, options, contextMenuService) {
+        var _a, _b;
+        const dropdownOptions = Object.assign({}, options !== null && options !== void 0 ? options : Object.create(null), {
+            menuAsChild: (_a = options === null || options === void 0 ? void 0 : options.menuAsChild) !== null && _a !== void 0 ? _a : false,
+            classNames: (_b = options === null || options === void 0 ? void 0 : options.classNames) !== null && _b !== void 0 ? _b : (ThemeIcon.isThemeIcon(action.item.icon) ? ThemeIcon.asClassName(action.item.icon) : undefined),
         });
+        super(action, { getActions: () => action.actions }, contextMenuService, dropdownOptions);
     }
     render(container) {
         super.render(container);
@@ -270,11 +272,12 @@ let SubmenuEntryActionViewItem = class SubmenuEntryActionViewItem extends Dropdo
     }
 };
 SubmenuEntryActionViewItem = __decorate([
-    __param(1, IContextMenuService)
+    __param(2, IContextMenuService)
 ], SubmenuEntryActionViewItem);
 export { SubmenuEntryActionViewItem };
 let DropdownWithDefaultActionViewItem = class DropdownWithDefaultActionViewItem extends BaseActionViewItem {
-    constructor(submenuAction, _keybindingService, _notificationService, _contextMenuService, _menuService, _instaService, _storageService) {
+    constructor(submenuAction, options, _keybindingService, _notificationService, _contextMenuService, _menuService, _instaService, _storageService) {
+        var _a, _b, _c;
         super(null, submenuAction);
         this._keybindingService = _keybindingService;
         this._notificationService = _notificationService;
@@ -294,10 +297,12 @@ let DropdownWithDefaultActionViewItem = class DropdownWithDefaultActionViewItem 
             defaultAction = submenuAction.actions[0];
         }
         this._defaultAction = this._instaService.createInstance(MenuEntryActionViewItem, defaultAction, undefined);
-        this._dropdown = new DropdownMenuActionViewItem(submenuAction, submenuAction.actions, this._contextMenuService, {
-            menuAsChild: true,
-            classNames: ['codicon', 'codicon-chevron-down']
+        const dropdownOptions = Object.assign({}, options !== null && options !== void 0 ? options : Object.create(null), {
+            menuAsChild: (_a = options === null || options === void 0 ? void 0 : options.menuAsChild) !== null && _a !== void 0 ? _a : true,
+            classNames: (_b = options === null || options === void 0 ? void 0 : options.classNames) !== null && _b !== void 0 ? _b : ['codicon', 'codicon-chevron-down'],
+            actionRunner: (_c = options === null || options === void 0 ? void 0 : options.actionRunner) !== null && _c !== void 0 ? _c : new ActionRunner()
         });
+        this._dropdown = new DropdownMenuActionViewItem(submenuAction, submenuAction.actions, this._contextMenuService, dropdownOptions);
         this._dropdown.actionRunner.onDidRun((e) => {
             if (e.action instanceof MenuItemAction) {
                 this.update(e.action);
@@ -327,7 +332,7 @@ let DropdownWithDefaultActionViewItem = class DropdownWithDefaultActionViewItem 
     render(container) {
         this._container = container;
         super.render(this._container);
-        this._container.classList.add('monaco-dropdown-with-primary');
+        this._container.classList.add('monaco-dropdown-with-default');
         const primaryContainer = $('.action-container');
         this._defaultAction.render(append(this._container, primaryContainer));
         this._register(addDisposableListener(primaryContainer, EventType.KEY_DOWN, (e) => {
@@ -381,27 +386,26 @@ let DropdownWithDefaultActionViewItem = class DropdownWithDefaultActionViewItem 
     }
 };
 DropdownWithDefaultActionViewItem = __decorate([
-    __param(1, IKeybindingService),
-    __param(2, INotificationService),
-    __param(3, IContextMenuService),
-    __param(4, IMenuService),
-    __param(5, IInstantiationService),
-    __param(6, IStorageService)
+    __param(2, IKeybindingService),
+    __param(3, INotificationService),
+    __param(4, IContextMenuService),
+    __param(5, IMenuService),
+    __param(6, IInstantiationService),
+    __param(7, IStorageService)
 ], DropdownWithDefaultActionViewItem);
 /**
  * Creates action view items for menu actions or submenu actions.
  */
-export function createActionViewItem(instaService, action) {
+export function createActionViewItem(instaService, action, options) {
     if (action instanceof MenuItemAction) {
         return instaService.createInstance(MenuEntryActionViewItem, action, undefined);
     }
     else if (action instanceof SubmenuItemAction) {
-        const allCodicons = !action.actions.some(a => a instanceof MenuItemAction && a.item.icon && !ThemeIcon.isThemeIcon(a.item.icon));
-        if (action.item.rememberDefaultAction && allCodicons) {
-            return instaService.createInstance(DropdownWithDefaultActionViewItem, action);
+        if (action.item.rememberDefaultAction) {
+            return instaService.createInstance(DropdownWithDefaultActionViewItem, action, options);
         }
         else {
-            return instaService.createInstance(SubmenuEntryActionViewItem, action);
+            return instaService.createInstance(SubmenuEntryActionViewItem, action, options);
         }
     }
     else {

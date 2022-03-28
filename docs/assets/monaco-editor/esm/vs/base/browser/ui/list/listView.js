@@ -8,22 +8,22 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
-import { getOrDefault } from '../../../common/objects.js';
-import { dispose, Disposable, toDisposable, DisposableStore } from '../../../common/lifecycle.js';
-import { Gesture, EventType as TouchEventType } from '../../touch.js';
-import { Event, Emitter } from '../../../common/event.js';
+import { isFirefox } from '../../browser.js';
+import { DataTransfers, StaticDND } from '../../dnd.js';
+import { $, addDisposableListener, animate, getContentHeight, getContentWidth, getTopLeftOffset, scheduleAtNextAnimationFrame } from '../../dom.js';
+import { DomEmitter } from '../../event.js';
+import { EventType as TouchEventType, Gesture } from '../../touch.js';
 import { SmoothScrollableElement } from '../scrollbar/scrollableElement.js';
+import { distinct, equals } from '../../../common/arrays.js';
+import { Delayer, disposableTimeout } from '../../../common/async.js';
+import { memoize } from '../../../common/decorators.js';
+import { Emitter, Event } from '../../../common/event.js';
+import { Disposable, DisposableStore, dispose, toDisposable } from '../../../common/lifecycle.js';
+import { getOrDefault } from '../../../common/objects.js';
+import { Range } from '../../../common/range.js';
 import { Scrollable } from '../../../common/scrollable.js';
 import { RangeMap, shift } from './rangeMap.js';
 import { RowCache } from './rowCache.js';
-import { memoize } from '../../../common/decorators.js';
-import { Range } from '../../../common/range.js';
-import { equals, distinct } from '../../../common/arrays.js';
-import { DataTransfers, StaticDND } from '../../dnd.js';
-import { disposableTimeout, Delayer } from '../../../common/async.js';
-import { isFirefox } from '../../browser.js';
-import { $, addDisposableListener, animate, getContentHeight, getContentWidth, getTopLeftOffset, scheduleAtNextAnimationFrame } from '../../dom.js';
-import { DomEmitter } from '../../event.js';
 const DefaultOptions = {
     useShadows: true,
     verticalScrollMode: 1 /* Auto */,
@@ -119,6 +119,16 @@ class ListViewAccessibilityProvider {
         }
     }
 }
+/**
+ * The {@link ListView} is a virtual scrolling engine.
+ *
+ * Given that it only renders elements within its viewport, it can hold large
+ * collections of elements and stay very performant. The performance bottleneck
+ * usually lies within the user's rendering code for each element.
+ *
+ * @remarks It is a low-level widget, not meant to be used directly. Refer to the
+ * List widget instead.
+ */
 export class ListView {
     constructor(container, virtualDelegate, renderers, options = DefaultOptions) {
         this.virtualDelegate = virtualDelegate;
@@ -165,7 +175,11 @@ export class ListView {
             this.rowsContainer.style.transform = 'translate3d(0px, 0px, 0px)';
         }
         this.disposables.add(Gesture.addTarget(this.rowsContainer));
-        this.scrollable = new Scrollable(getOrDefault(options, o => o.smoothScrolling, false) ? 125 : 0, cb => scheduleAtNextAnimationFrame(cb));
+        this.scrollable = new Scrollable({
+            forceIntegerValues: true,
+            smoothScrollDuration: getOrDefault(options, o => o.smoothScrolling, false) ? 125 : 0,
+            scheduleAtNextAnimationFrame: cb => scheduleAtNextAnimationFrame(cb)
+        });
         this.scrollableElement = this.disposables.add(new SmoothScrollableElement(this.rowsContainer, {
             alwaysConsumeMouseWheel: getOrDefault(options, o => o.alwaysConsumeMouseWheel, DefaultOptions.alwaysConsumeMouseWheel),
             horizontal: 1 /* Auto */,
@@ -253,7 +267,7 @@ export class ListView {
         const removeRange = Range.intersect(previousRenderRange, deleteRange);
         // try to reuse rows, avoid removing them from DOM
         const rowsToDispose = new Map();
-        for (let i = removeRange.start; i < removeRange.end; i++) {
+        for (let i = removeRange.end - 1; i >= removeRange.start; i--) {
             const item = this.items[i];
             item.dragStartDisposable.dispose();
             if (item.row) {
@@ -284,7 +298,8 @@ export class ListView {
             row: null,
             uri: undefined,
             dropTarget: false,
-            dragStartDisposable: Disposable.None
+            dragStartDisposable: Disposable.None,
+            checkedDisposable: Disposable.None
         }));
         let deleted;
         // TODO@joao: improve this optimization to catch even more cases
@@ -463,8 +478,13 @@ export class ListView {
         const role = this.accessibilityProvider.getRole(item.element) || 'listitem';
         item.row.domNode.setAttribute('role', role);
         const checked = this.accessibilityProvider.isChecked(item.element);
-        if (typeof checked !== 'undefined') {
+        if (typeof checked === 'boolean') {
             item.row.domNode.setAttribute('aria-checked', String(!!checked));
+        }
+        else if (checked) {
+            const update = (checked) => item.row.domNode.setAttribute('aria-checked', String(!!checked));
+            update(checked.value);
+            item.checkedDisposable = checked.onDidChange(update);
         }
         if (!item.row.domNode.parentElement) {
             if (beforeElement) {
@@ -518,6 +538,7 @@ export class ListView {
         }
         item.row.domNode.setAttribute('data-index', `${index}`);
         item.row.domNode.setAttribute('data-last-element', index === this.length - 1 ? 'true' : 'false');
+        item.row.domNode.setAttribute('data-parity', index % 2 === 0 ? 'even' : 'odd');
         item.row.domNode.setAttribute('aria-setsize', String(this.accessibilityProvider.getSetSize(item.element, index, this.length)));
         item.row.domNode.setAttribute('aria-posinset', String(this.accessibilityProvider.getPosInSet(item.element, index)));
         item.row.domNode.setAttribute('id', this.getElementDomId(index));
@@ -526,6 +547,7 @@ export class ListView {
     removeItemFromDOM(index) {
         const item = this.items[index];
         item.dragStartDisposable.dispose();
+        item.checkedDisposable.dispose();
         if (item.row) {
             const renderer = this.renderers.get(item.templateId);
             if (renderer && renderer.disposeElement) {
@@ -886,6 +908,15 @@ export class ListView {
     }
     probeDynamicHeight(index) {
         const item = this.items[index];
+        if (!!this.virtualDelegate.getDynamicHeight) {
+            const newSize = this.virtualDelegate.getDynamicHeight(item.element);
+            if (newSize !== null) {
+                const size = item.size;
+                item.size = newSize;
+                item.lastDynamicHeightWidth = this.renderWidth;
+                return newSize - size;
+            }
+        }
         if (!item.hasDynamicHeight || item.lastDynamicHeightWidth === this.renderWidth) {
             return 0;
         }

@@ -2,7 +2,7 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-import './media/scrollbars.css';
+import { getZoomFactor } from '../../browser.js';
 import * as dom from '../../dom.js';
 import { createFastDomNode } from '../../fastDomNode.js';
 import { StandardWheelEvent } from '../../mouseEvent.js';
@@ -14,7 +14,7 @@ import { Emitter } from '../../../common/event.js';
 import { dispose } from '../../../common/lifecycle.js';
 import * as platform from '../../../common/platform.js';
 import { Scrollable } from '../../../common/scrollable.js';
-import { getZoomFactor } from '../../browser.js';
+import './media/scrollbars.css';
 const HIDE_TIMEOUT = 500;
 const SCROLL_WHEEL_SENSITIVITY = 50;
 const SCROLL_WHEEL_SMOOTH_SCROLL_ENABLED = true;
@@ -163,6 +163,9 @@ export class AbstractScrollableElement extends Widget {
         this._shouldRender = true;
         this._revealOnScroll = true;
     }
+    get options() {
+        return this._options;
+    }
     dispose() {
         this._mouseWheelToDispose = dispose(this._mouseWheelToDispose);
         super.dispose();
@@ -302,11 +305,15 @@ export class AbstractScrollableElement extends Widget {
             const futureScrollPosition = this._scrollable.getFutureScrollPosition();
             let desiredScrollPosition = {};
             if (deltaY) {
-                const desiredScrollTop = futureScrollPosition.scrollTop - SCROLL_WHEEL_SENSITIVITY * deltaY;
+                const deltaScrollTop = SCROLL_WHEEL_SENSITIVITY * deltaY;
+                // Here we convert values such as -0.3 to -1 or 0.3 to 1, otherwise low speed scrolling will never scroll
+                const desiredScrollTop = futureScrollPosition.scrollTop - (deltaScrollTop < 0 ? Math.floor(deltaScrollTop) : Math.ceil(deltaScrollTop));
                 this._verticalScrollbar.writeScrollPosition(desiredScrollPosition, desiredScrollTop);
             }
             if (deltaX) {
-                const desiredScrollLeft = futureScrollPosition.scrollLeft - SCROLL_WHEEL_SENSITIVITY * deltaX;
+                const deltaScrollLeft = SCROLL_WHEEL_SENSITIVITY * deltaX;
+                // Here we convert values such as -0.3 to -1 or 0.3 to 1, otherwise low speed scrolling will never scroll
+                const desiredScrollLeft = futureScrollPosition.scrollLeft - (deltaScrollLeft < 0 ? Math.floor(deltaScrollLeft) : Math.ceil(deltaScrollLeft));
                 this._horizontalScrollbar.writeScrollPosition(desiredScrollPosition, desiredScrollLeft);
             }
             // Check that we are scrolling towards a location which is valid
@@ -416,7 +423,11 @@ export class ScrollableElement extends AbstractScrollableElement {
     constructor(element, options) {
         options = options || {};
         options.mouseWheelSmoothScroll = false;
-        const scrollable = new Scrollable(0, (callback) => dom.scheduleAtNextAnimationFrame(callback));
+        const scrollable = new Scrollable({
+            forceIntegerValues: true,
+            smoothScrollDuration: 0,
+            scheduleAtNextAnimationFrame: (callback) => dom.scheduleAtNextAnimationFrame(callback)
+        });
         super(element, options, scrollable);
         this._register(scrollable);
     }
@@ -440,9 +451,17 @@ export class SmoothScrollableElement extends AbstractScrollableElement {
         return this._scrollable.getCurrentScrollPosition();
     }
 }
-export class DomScrollableElement extends ScrollableElement {
+export class DomScrollableElement extends AbstractScrollableElement {
     constructor(element, options) {
-        super(element, options);
+        options = options || {};
+        options.mouseWheelSmoothScroll = false;
+        const scrollable = new Scrollable({
+            forceIntegerValues: false,
+            smoothScrollDuration: 0,
+            scheduleAtNextAnimationFrame: (callback) => dom.scheduleAtNextAnimationFrame(callback)
+        });
+        super(element, options, scrollable);
+        this._register(scrollable);
         this._element = element;
         this.onScroll((e) => {
             if (e.scrollTopChanged) {
@@ -453,6 +472,12 @@ export class DomScrollableElement extends ScrollableElement {
             }
         });
         this.scanDomNode();
+    }
+    setScrollPosition(update) {
+        this._scrollable.setScrollPositionNow(update);
+    }
+    getScrollPosition() {
+        return this._scrollable.getCurrentScrollPosition();
     }
     scanDomNode() {
         // width, scrollLeft, scrollWidth, height, scrollTop, scrollHeight

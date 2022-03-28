@@ -19,7 +19,6 @@ export class BareFontInfo {
      */
     constructor(opts) {
         this._bareFontInfoBrand = undefined;
-        this.zoomLevel = opts.zoomLevel;
         this.pixelRatio = opts.pixelRatio;
         this.fontFamily = String(opts.fontFamily);
         this.fontWeight = String(opts.fontWeight);
@@ -31,24 +30,24 @@ export class BareFontInfo {
     /**
      * @internal
      */
-    static createFromValidatedSettings(options, zoomLevel, pixelRatio, ignoreEditorZoom) {
-        const fontFamily = options.get(40 /* fontFamily */);
-        const fontWeight = options.get(44 /* fontWeight */);
-        const fontSize = options.get(43 /* fontSize */);
-        const fontFeatureSettings = options.get(42 /* fontLigatures */);
-        const lineHeight = options.get(57 /* lineHeight */);
-        const letterSpacing = options.get(54 /* letterSpacing */);
-        return BareFontInfo._create(fontFamily, fontWeight, fontSize, fontFeatureSettings, lineHeight, letterSpacing, zoomLevel, pixelRatio, ignoreEditorZoom);
+    static createFromValidatedSettings(options, pixelRatio, ignoreEditorZoom) {
+        const fontFamily = options.get(43 /* fontFamily */);
+        const fontWeight = options.get(47 /* fontWeight */);
+        const fontSize = options.get(46 /* fontSize */);
+        const fontFeatureSettings = options.get(45 /* fontLigatures */);
+        const lineHeight = options.get(59 /* lineHeight */);
+        const letterSpacing = options.get(56 /* letterSpacing */);
+        return BareFontInfo._create(fontFamily, fontWeight, fontSize, fontFeatureSettings, lineHeight, letterSpacing, pixelRatio, ignoreEditorZoom);
     }
     /**
      * @internal
      */
-    static _create(fontFamily, fontWeight, fontSize, fontFeatureSettings, lineHeight, letterSpacing, zoomLevel, pixelRatio, ignoreEditorZoom) {
+    static _create(fontFamily, fontWeight, fontSize, fontFeatureSettings, lineHeight, letterSpacing, pixelRatio, ignoreEditorZoom) {
         if (lineHeight === 0) {
             lineHeight = GOLDEN_LINE_HEIGHT_RATIO * fontSize;
         }
         else if (lineHeight < MINIMUM_LINE_HEIGHT) {
-            // Values too small to be line heights in pixels are probably in ems. Accept them gracefully.
+            // Values too small to be line heights in pixels are in ems.
             lineHeight = lineHeight * fontSize;
         }
         // Enforce integer, minimum constraints
@@ -60,7 +59,6 @@ export class BareFontInfo {
         fontSize *= editorZoomLevelMultiplier;
         lineHeight *= editorZoomLevelMultiplier;
         return new BareFontInfo({
-            zoomLevel: zoomLevel,
             pixelRatio: pixelRatio,
             fontFamily: fontFamily,
             fontWeight: fontWeight,
@@ -74,21 +72,28 @@ export class BareFontInfo {
      * @internal
      */
     getId() {
-        return this.zoomLevel + '-' + this.pixelRatio + '-' + this.fontFamily + '-' + this.fontWeight + '-' + this.fontSize + '-' + this.fontFeatureSettings + '-' + this.lineHeight + '-' + this.letterSpacing;
+        return `${this.pixelRatio}-${this.fontFamily}-${this.fontWeight}-${this.fontSize}-${this.fontFeatureSettings}-${this.lineHeight}-${this.letterSpacing}`;
     }
     /**
      * @internal
      */
-    getMassagedFontFamily() {
-        if (/[,"']/.test(this.fontFamily)) {
+    getMassagedFontFamily(fallbackFontFamily) {
+        const fontFamily = BareFontInfo._wrapInQuotes(this.fontFamily);
+        if (fallbackFontFamily && this.fontFamily !== fallbackFontFamily) {
+            return `${fontFamily}, ${fallbackFontFamily}`;
+        }
+        return fontFamily;
+    }
+    static _wrapInQuotes(fontFamily) {
+        if (/[,"']/.test(fontFamily)) {
             // Looks like the font family might be already escaped
-            return this.fontFamily;
+            return fontFamily;
         }
-        if (/[+ ]/.test(this.fontFamily)) {
+        if (/[+ ]/.test(fontFamily)) {
             // Wrap a font family using + or <space> with quotes
-            return `"${this.fontFamily}"`;
+            return `"${fontFamily}"`;
         }
-        return this.fontFamily;
+        return fontFamily;
     }
 }
 // change this whenever `FontInfo` members are changed

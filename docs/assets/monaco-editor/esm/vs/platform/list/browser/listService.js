@@ -14,23 +14,23 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 import { createStyleSheet } from '../../../base/browser/dom.js';
 import { PagedList } from '../../../base/browser/ui/list/listPaging.js';
 import { DefaultStyleController, isSelectionRangeChangeEvent, isSelectionSingleChangeEvent, List } from '../../../base/browser/ui/list/listWidget.js';
+import { Table } from '../../../base/browser/ui/table/tableWidget.js';
+import { AsyncDataTree, CompressibleAsyncDataTree } from '../../../base/browser/ui/tree/asyncDataTree.js';
+import { DataTree } from '../../../base/browser/ui/tree/dataTree.js';
+import { CompressibleObjectTree, ObjectTree } from '../../../base/browser/ui/tree/objectTree.js';
 import { Emitter, Event } from '../../../base/common/event.js';
-import { Disposable, dispose, toDisposable, DisposableStore, combinedDisposable } from '../../../base/common/lifecycle.js';
+import { combinedDisposable, Disposable, DisposableStore, dispose, toDisposable } from '../../../base/common/lifecycle.js';
 import { localize } from '../../../nls.js';
+import { IAccessibilityService } from '../../accessibility/common/accessibility.js';
 import { IConfigurationService } from '../../configuration/common/configuration.js';
 import { Extensions as ConfigurationExtensions } from '../../configuration/common/configurationRegistry.js';
 import { ContextKeyExpr, IContextKeyService, RawContextKey } from '../../contextkey/common/contextkey.js';
+import { InputFocusedContextKey } from '../../contextkey/common/contextkeys.js';
 import { createDecorator } from '../../instantiation/common/instantiation.js';
 import { IKeybindingService } from '../../keybinding/common/keybinding.js';
 import { Registry } from '../../registry/common/platform.js';
 import { attachListStyler, computeStyles, defaultListStyles } from '../../theme/common/styler.js';
 import { IThemeService } from '../../theme/common/themeService.js';
-import { InputFocusedContextKey } from '../../contextkey/common/contextkeys.js';
-import { ObjectTree, CompressibleObjectTree } from '../../../base/browser/ui/tree/objectTree.js';
-import { AsyncDataTree, CompressibleAsyncDataTree } from '../../../base/browser/ui/tree/asyncDataTree.js';
-import { DataTree } from '../../../base/browser/ui/tree/dataTree.js';
-import { IAccessibilityService } from '../../accessibility/common/accessibility.js';
-import { Table } from '../../../base/browser/ui/table/tableWidget.js';
 export const IListService = createDecorator('listService');
 let ListService = class ListService {
     constructor(_themeService) {
@@ -42,6 +42,15 @@ let ListService = class ListService {
     }
     get lastFocusedList() {
         return this._lastFocusedWidget;
+    }
+    setLastFocusedList(widget) {
+        var _a, _b;
+        if (widget === this._lastFocusedWidget) {
+            return;
+        }
+        (_a = this._lastFocusedWidget) === null || _a === void 0 ? void 0 : _a.getHTMLElement().classList.remove('last-focused');
+        this._lastFocusedWidget = widget;
+        (_b = this._lastFocusedWidget) === null || _b === void 0 ? void 0 : _b.getHTMLElement().classList.add('last-focused');
     }
     register(widget, extraContextKeys) {
         if (!this._hasCreatedStyleController) {
@@ -58,12 +67,12 @@ let ListService = class ListService {
         this.lists.push(registeredList);
         // Check for currently being focused
         if (widget.getHTMLElement() === document.activeElement) {
-            this._lastFocusedWidget = widget;
+            this.setLastFocusedList(widget);
         }
-        return combinedDisposable(widget.onDidFocus(() => this._lastFocusedWidget = widget), toDisposable(() => this.lists.splice(this.lists.indexOf(registeredList), 1)), widget.onDidDispose(() => {
+        return combinedDisposable(widget.onDidFocus(() => this.setLastFocusedList(widget)), toDisposable(() => this.lists.splice(this.lists.indexOf(registeredList), 1)), widget.onDidDispose(() => {
             this.lists = this.lists.filter(l => l !== registeredList);
             if (this._lastFocusedWidget === widget) {
-                this._lastFocusedWidget = undefined;
+                this.setLastFocusedList(undefined);
             }
         }));
     }
@@ -82,6 +91,10 @@ export const WorkbenchListHasSelectionOrFocus = new RawContextKey('listHasSelect
 export const WorkbenchListDoubleSelection = new RawContextKey('listDoubleSelection', false);
 export const WorkbenchListMultiSelection = new RawContextKey('listMultiSelection', false);
 export const WorkbenchListSelectionNavigation = new RawContextKey('listSelectionNavigation', false);
+export const WorkbenchTreeElementCanCollapse = new RawContextKey('treeElementCanCollapse', false);
+export const WorkbenchTreeElementHasParent = new RawContextKey('treeElementHasParent', false);
+export const WorkbenchTreeElementCanExpand = new RawContextKey('treeElementCanExpand', false);
+export const WorkbenchTreeElementHasChild = new RawContextKey('treeElementHasChild', false);
 export const WorkbenchListAutomaticKeyboardNavigationKey = 'listAutomaticKeyboardNavigation';
 function createScopedContextKeyService(contextKeyService, widget) {
     const result = contextKeyService.createScoped(widget.getHTMLElement());
@@ -309,7 +322,6 @@ let WorkbenchTable = class WorkbenchTable extends Table {
         const horizontalScrolling = typeof options.horizontalScrolling !== 'undefined' ? options.horizontalScrolling : Boolean(configurationService.getValue(horizontalScrollingKey));
         const [workbenchListOptions, workbenchListOptionsDisposable] = toWorkbenchListOptions(options, configurationService, keybindingService);
         super(user, container, delegate, columns, renderers, Object.assign(Object.assign(Object.assign({ keyboardSupport: false }, computeStyles(themeService.getColorTheme(), defaultListStyles)), workbenchListOptions), { horizontalScrolling }));
-        this.disposables = new DisposableStore();
         this.disposables.add(workbenchListOptionsDisposable);
         this.contextKeyService = createScopedContextKeyService(contextKeyService, this);
         this.themeService = themeService;
@@ -503,6 +515,9 @@ class TreeResourceNavigator extends ResourceNavigator {
 function createKeyboardNavigationEventFilter(container, keybindingService) {
     let inChord = false;
     return event => {
+        if (event.toKeybinding().isModifierKey()) {
+            return false;
+        }
         if (inChord) {
             inChord = false;
             return false;
@@ -672,6 +687,10 @@ let WorkbenchTreeInternals = class WorkbenchTreeInternals {
         this.hasSelectionOrFocus = WorkbenchListHasSelectionOrFocus.bindTo(this.contextKeyService);
         this.hasDoubleSelection = WorkbenchListDoubleSelection.bindTo(this.contextKeyService);
         this.hasMultiSelection = WorkbenchListMultiSelection.bindTo(this.contextKeyService);
+        this.treeElementCanCollapse = WorkbenchTreeElementCanCollapse.bindTo(this.contextKeyService);
+        this.treeElementHasParent = WorkbenchTreeElementHasParent.bindTo(this.contextKeyService);
+        this.treeElementCanExpand = WorkbenchTreeElementCanExpand.bindTo(this.contextKeyService);
+        this.treeElementHasChild = WorkbenchTreeElementHasChild.bindTo(this.contextKeyService);
         this._useAltAsMultipleSelectionModifier = useAltAsMultipleSelectionModifier(configurationService);
         const interestingContextKeys = new Set();
         interestingContextKeys.add(WorkbenchListAutomaticKeyboardNavigationKey);
@@ -684,6 +703,17 @@ let WorkbenchTreeInternals = class WorkbenchTreeInternals {
             });
         };
         this.updateStyleOverrides(overrideStyles);
+        const updateCollapseContextKeys = () => {
+            const focus = tree.getFocus()[0];
+            if (!focus) {
+                return;
+            }
+            const node = tree.getNode(focus);
+            this.treeElementCanCollapse.set(node.collapsible && !node.collapsed);
+            this.treeElementHasParent.set(!!tree.getParentElement(focus));
+            this.treeElementCanExpand.set(node.collapsible && node.collapsed);
+            this.treeElementHasChild.set(!!tree.getFirstElementChild(focus));
+        };
         this.disposables.push(this.contextKeyService, listService.register(tree), tree.onDidChangeSelection(() => {
             const selection = tree.getSelection();
             const focus = tree.getFocus();
@@ -696,7 +726,8 @@ let WorkbenchTreeInternals = class WorkbenchTreeInternals {
             const selection = tree.getSelection();
             const focus = tree.getFocus();
             this.hasSelectionOrFocus.set(selection.length > 0 || focus.length > 0);
-        }), configurationService.onDidChangeConfiguration(e => {
+            updateCollapseContextKeys();
+        }), tree.onDidChangeCollapseState(updateCollapseContextKeys), tree.onDidChangeModel(updateCollapseContextKeys), configurationService.onDidChangeConfiguration(e => {
             let newOptions = {};
             if (e.affectsConfiguration(multiSelectModifierSettingKey)) {
                 this._useAltAsMultipleSelectionModifier = useAltAsMultipleSelectionModifier(configurationService);
@@ -710,7 +741,7 @@ let WorkbenchTreeInternals = class WorkbenchTreeInternals {
                 newOptions = Object.assign(Object.assign({}, newOptions), { renderIndentGuides });
             }
             if (e.affectsConfiguration(listSmoothScrolling)) {
-                const smoothScrolling = Boolean(!!configurationService.getValue(listSmoothScrolling));
+                const smoothScrolling = Boolean(configurationService.getValue(listSmoothScrolling));
                 newOptions = Object.assign(Object.assign({}, newOptions), { smoothScrolling });
             }
             if (e.affectsConfiguration(keyboardNavigationSettingKey)) {
@@ -720,7 +751,7 @@ let WorkbenchTreeInternals = class WorkbenchTreeInternals {
                 newOptions = Object.assign(Object.assign({}, newOptions), { automaticKeyboardNavigation: getAutomaticKeyboardNavigation() });
             }
             if (e.affectsConfiguration(horizontalScrollingKey) && options.horizontalScrolling === undefined) {
-                const horizontalScrolling = Boolean(!!configurationService.getValue(horizontalScrollingKey));
+                const horizontalScrolling = Boolean(configurationService.getValue(horizontalScrollingKey));
                 newOptions = Object.assign(Object.assign({}, newOptions), { horizontalScrolling });
             }
             if (e.affectsConfiguration(treeExpandMode) && options.expandOnlyOnTwistieClick === undefined) {
@@ -808,7 +839,7 @@ configurationRegistry.registerConfiguration({
         [treeIndentKey]: {
             type: 'number',
             default: 8,
-            minimum: 0,
+            minimum: 4,
             maximum: 40,
             description: localize('tree indent setting', "Controls tree indentation in pixels.")
         },
@@ -826,12 +857,12 @@ configurationRegistry.registerConfiguration({
         [mouseWheelScrollSensitivityKey]: {
             type: 'number',
             default: 1,
-            description: localize('Mouse Wheel Scroll Sensitivity', "A multiplier to be used on the deltaX and deltaY of mouse wheel scroll events.")
+            description: localize('Mouse Wheel Scroll Sensitivity', "A multiplier to be used on the `deltaX` and `deltaY` of mouse wheel scroll events.")
         },
         [fastScrollSensitivityKey]: {
             type: 'number',
             default: 5,
-            description: localize('Fast Scroll Sensitivity', "Scrolling speed multiplier when pressing Alt.")
+            description: localize('Fast Scroll Sensitivity', "Scrolling speed multiplier when pressing `Alt`.")
         },
         [keyboardNavigationSettingKey]: {
             type: 'string',

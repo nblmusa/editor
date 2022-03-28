@@ -2,19 +2,19 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-import './inputBox.css';
-import * as nls from '../../../../nls.js';
 import * as dom from '../../dom.js';
+import { DomEmitter } from '../../event.js';
 import { renderFormattedText, renderText } from '../../formattedTextRenderer.js';
-import * as aria from '../aria/aria.js';
 import { ActionBar } from '../actionbar/actionbar.js';
-import { Event, Emitter } from '../../../common/event.js';
+import * as aria from '../aria/aria.js';
+import { ScrollableElement } from '../scrollbar/scrollableElement.js';
 import { Widget } from '../widget.js';
 import { Color } from '../../../common/color.js';
-import { mixin } from '../../../common/objects.js';
+import { Emitter, Event } from '../../../common/event.js';
 import { HistoryNavigator } from '../../../common/history.js';
-import { ScrollableElement } from '../scrollbar/scrollableElement.js';
-import { DomEmitter } from '../../event.js';
+import { mixin } from '../../../common/objects.js';
+import './inputBox.css';
+import * as nls from '../../../../nls.js';
 const $ = dom.$;
 const defaultOpts = {
     inputBackground: Color.fromHex('#3C3C3C'),
@@ -213,12 +213,8 @@ export class InputBox extends Widget {
         }
     }
     set paddingRight(paddingRight) {
-        if (this.options.flexibleHeight && this.options.flexibleWidth) {
-            this.input.style.width = `calc(100% - ${paddingRight}px)`;
-        }
-        else {
-            this.input.style.paddingRight = paddingRight + 'px';
-        }
+        // Set width to avoid hint text overlapping buttons
+        this.input.style.width = `calc(100% - ${paddingRight}px)`;
         if (this.mirror) {
             this.mirror.style.paddingRight = paddingRight + 'px';
         }
@@ -429,8 +425,62 @@ export class InputBox extends Widget {
 }
 export class HistoryInputBox extends InputBox {
     constructor(container, contextViewProvider, options) {
+        const NLS_PLACEHOLDER_HISTORY_HINT = nls.localize({ key: 'history.inputbox.hint', comment: ['Text will be prefixed with \u21C5 plus a single space, then used as a hint where input field keeps history'] }, "for history");
+        const NLS_PLACEHOLDER_HISTORY_HINT_SUFFIX = ` or \u21C5 ${NLS_PLACEHOLDER_HISTORY_HINT}`;
+        const NLS_PLACEHOLDER_HISTORY_HINT_SUFFIX_IN_PARENS = ` (\u21C5 ${NLS_PLACEHOLDER_HISTORY_HINT})`;
         super(container, contextViewProvider, options);
         this.history = new HistoryNavigator(options.history, 100);
+        // Function to append the history suffix to the placeholder if necessary
+        const addSuffix = () => {
+            if (options.showHistoryHint && options.showHistoryHint() && !this.placeholder.endsWith(NLS_PLACEHOLDER_HISTORY_HINT_SUFFIX) && !this.placeholder.endsWith(NLS_PLACEHOLDER_HISTORY_HINT_SUFFIX_IN_PARENS) && this.history.getHistory().length) {
+                const suffix = this.placeholder.endsWith(')') ? NLS_PLACEHOLDER_HISTORY_HINT_SUFFIX : NLS_PLACEHOLDER_HISTORY_HINT_SUFFIX_IN_PARENS;
+                const suffixedPlaceholder = this.placeholder + suffix;
+                if (options.showPlaceholderOnFocus && document.activeElement !== this.input) {
+                    this.placeholder = suffixedPlaceholder;
+                }
+                else {
+                    this.setPlaceHolder(suffixedPlaceholder);
+                }
+            }
+        };
+        // Spot the change to the textarea class attribute which occurs when it changes between non-empty and empty,
+        // and add the history suffix to the placeholder if not yet present
+        this.observer = new MutationObserver((mutationList, observer) => {
+            mutationList.forEach((mutation) => {
+                if (!mutation.target.textContent) {
+                    addSuffix();
+                }
+            });
+        });
+        this.observer.observe(this.input, { attributeFilter: ['class'] });
+        this.onfocus(this.input, () => addSuffix());
+        this.onblur(this.input, () => {
+            const resetPlaceholder = (historyHint) => {
+                if (!this.placeholder.endsWith(historyHint)) {
+                    return false;
+                }
+                else {
+                    const revertedPlaceholder = this.placeholder.slice(0, this.placeholder.length - historyHint.length);
+                    if (options.showPlaceholderOnFocus) {
+                        this.placeholder = revertedPlaceholder;
+                    }
+                    else {
+                        this.setPlaceHolder(revertedPlaceholder);
+                    }
+                    return true;
+                }
+            };
+            if (!resetPlaceholder(NLS_PLACEHOLDER_HISTORY_HINT_SUFFIX_IN_PARENS)) {
+                resetPlaceholder(NLS_PLACEHOLDER_HISTORY_HINT_SUFFIX);
+            }
+        });
+    }
+    dispose() {
+        super.dispose();
+        if (this.observer) {
+            this.observer.disconnect();
+            this.observer = undefined;
+        }
     }
     addToHistory() {
         if (this.value && this.value !== this.getCurrentValue()) {

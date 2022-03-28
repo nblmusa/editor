@@ -20,15 +20,15 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-import * as nls from '../../../nls.js';
-import { IUndoRedoService, ResourceEditStackSnapshot, UndoRedoGroup, UndoRedoSource } from './undoRedo.js';
 import { onUnexpectedError } from '../../../base/common/errors.js';
-import { registerSingleton } from '../../instantiation/common/extensions.js';
-import { IDialogService } from '../../dialogs/common/dialogs.js';
-import Severity from '../../../base/common/severity.js';
-import { Schemas } from '../../../base/common/network.js';
-import { INotificationService } from '../../notification/common/notification.js';
 import { Disposable, isDisposable } from '../../../base/common/lifecycle.js';
+import { Schemas } from '../../../base/common/network.js';
+import Severity from '../../../base/common/severity.js';
+import * as nls from '../../../nls.js';
+import { IDialogService } from '../../dialogs/common/dialogs.js';
+import { registerSingleton } from '../../instantiation/common/extensions.js';
+import { INotificationService } from '../../notification/common/notification.js';
+import { IUndoRedoService, ResourceEditStackSnapshot, UndoRedoGroup, UndoRedoSource } from './undoRedo.js';
 const DEBUG = false;
 function getResourceLabel(resource) {
     return resource.scheme === Schemas.file ? resource.fsPath : resource.path;
@@ -874,7 +874,7 @@ let UndoRedoService = class UndoRedoService {
         return __awaiter(this, void 0, void 0, function* () {
             const result = yield this._dialogService.show(Severity.Info, nls.localize('confirmDifferentSource', "Would you like to undo '{0}'?", element.label), [
                 nls.localize('confirmDifferentSource.yes', "Yes"),
-                nls.localize('cancel', "Cancel"),
+                nls.localize('confirmDifferentSource.no', "No"),
             ], {
                 cancelId: 1
             });

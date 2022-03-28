@@ -11,9 +11,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-import { Disposable } from '../../../common/lifecycle.js';
-import { Emitter, Event } from '../../../common/event.js';
 import { ThrottledDelayer } from '../../../common/async.js';
+import { Emitter, Event } from '../../../common/event.js';
+import { Disposable } from '../../../common/lifecycle.js';
 import { isUndefinedOrNull } from '../../../common/types.js';
 var StorageState;
 (function (StorageState) {
@@ -113,7 +113,7 @@ export class Storage extends Disposable {
             // Event
             this._onDidChangeStorage.fire(key);
             // Accumulate work by scheduling after timeout
-            return this.flushDelayer.trigger(() => this.flushPending());
+            return this.doFlush();
         });
     }
     delete(key) {
@@ -133,7 +133,7 @@ export class Storage extends Disposable {
             // Event
             this._onDidChangeStorage.fire(key);
             // Accumulate work by scheduling after timeout
-            return this.flushDelayer.trigger(() => this.flushPending());
+            return this.doFlush();
         });
     }
     get hasPending() {
@@ -159,6 +159,11 @@ export class Storage extends Disposable {
                     }
                 }
             });
+        });
+    }
+    doFlush(delay) {
+        return __awaiter(this, void 0, void 0, function* () {
+            return this.flushDelayer.trigger(() => this.flushPending(), delay);
         });
     }
     dispose() {
