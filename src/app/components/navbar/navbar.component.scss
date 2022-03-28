@@ -1,18 +1,24 @@
 .navbar {
-  background: #353535;
+  // background: #353535;
+  background: hsl(220 10% 20%);
   display: flex;
   user-select: none;
   cursor: default;
   font-size: 14px;
-  padding: 5px;
+  // padding: 5px;
   color: #777;
   font-weight: 400;
   align-items: center;
   justify-content: space-between;
+  border-bottom: 4px solid #1f9ba1;
 
   & > div {
     display: flex;
     align-items: center;
+  }
+
+  &__buttons {
+    display: flex;
   }
 
   button {
@@ -27,15 +33,17 @@
     background: none;
     border: none;
     outline: none;
-    height: 40px;
+    // height: 40px;
+    padding: 6px;
+    // border-radius: 2px;
 
     &:hover {
-      background: #444;
+      background: hsl(220 60% 95% / 0.1);
     }
 
     img {
-      width: 24px;
-      height: 24px;
+      width: 20px;
+      height: 20px;
     }
   }
 }

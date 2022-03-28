@@ -44,7 +44,7 @@ export class AppComponent  implements OnInit, AfterViewInit {
   ngOnInit() {
     let content = JSON.parse(localStorage.getItem('split-content') as any);
     this.code = this.codeModel.value = content ? content : this.code;
-    this.isLoading = false;
+    setTimeout(() => this.isLoading = false);
   }
 
   ngAfterViewInit() {
