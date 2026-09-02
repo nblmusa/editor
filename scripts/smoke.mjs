@@ -642,6 +642,18 @@ await step('module tabs can be closed by touch', async () => {
 });
 
 await step('the page itself never scrolls on mobile', async () => {
+  // Blink resolves percentage heights against the visible viewport, so the
+  // iOS layout-viewport mismatch that let the app hang below the fold cannot
+  // be reproduced here. What is checkable is the shell that guards against it:
+  // the document must refuse to scroll, and the app must not outgrow it.
+  const locked = await page.evaluate(() => {
+    const style = (el) => getComputedStyle(el).overflowY;
+    return { html: style(document.documentElement), body: style(document.body) };
+  });
+  if (locked.html !== 'hidden' || locked.body !== 'hidden') {
+    throw new Error(`the document can still scroll: ${JSON.stringify(locked)}`);
+  }
+
   const box = await page.evaluate(() => {
     window.scrollTo(0, 600);
     const de = document.documentElement;
