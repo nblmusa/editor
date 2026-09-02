@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { Braces, FileCode2, Palette, Plus, Sparkles, WandSparkles, X } from 'lucide-react';
 import type { PaneId, PaneKey, PenModule, Project } from '@/types';
@@ -80,6 +80,16 @@ export function EditorArea({ dark, onRun, onSave }: Props) {
 
   const jsx = project.jsFlavor === 'babel';
   const columns = settings.editorLayout === 'columns';
+
+  const strip = useRef<HTMLDivElement>(null);
+
+  // A new module takes focus the moment it is added, and its tab is appended
+  // past the right edge of a strip that is already full.
+  useEffect(() => {
+    strip.current
+      ?.querySelector(`[data-tab="${activePane}"]`)
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [activePane]);
 
   const langs = useMemo(
     () => ({
@@ -176,56 +186,61 @@ export function EditorArea({ dark, onRun, onSave }: Props) {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-surface">
-      <div className="flex h-9 shrink-0 items-stretch gap-px border-b border-line px-1.5">
-        {PANES.map((pane) => {
-          const active = pane.id === activePane;
-          const filled = project[pane.id].trim().length > 0;
-          return (
-            <button
-              key={pane.id}
-              onClick={() => setActivePane(pane.id)}
-              className={clsx(
-                'relative inline-flex items-center gap-1.5 px-3 text-[12.5px] font-medium transition-colors',
-                active ? 'text-ink' : 'text-faint hover:text-muted',
-              )}
-            >
-              <span
-                className={clsx('size-1.5 rounded-full transition-opacity', !filled && 'opacity-25')}
-                style={{ background: pane.color }}
-              />
-              {labelFor(pane.id)}
-              {active && (
+      <div className="flex h-9 shrink-0 items-stretch border-b border-line">
+        {/* The tabs scroll on their own so a pen with several modules cannot
+            squeeze the language chip and the format button off the row. */}
+        <div ref={strip} className="no-scrollbar flex min-w-0 flex-1 items-stretch gap-px overflow-x-auto px-1.5">
+          {PANES.map((pane) => {
+            const active = pane.id === activePane;
+            const filled = project[pane.id].trim().length > 0;
+            return (
+              <button
+                key={pane.id}
+                data-tab={pane.id}
+                onClick={() => setActivePane(pane.id)}
+                className={clsx(
+                  'relative inline-flex shrink-0 items-center gap-1.5 px-3 text-[12.5px] font-medium whitespace-nowrap transition-colors',
+                  active ? 'text-ink' : 'text-faint hover:text-muted',
+                )}
+              >
                 <span
-                  className="absolute inset-x-1.5 -bottom-px h-0.5 rounded-full"
+                  className={clsx('size-1.5 rounded-full transition-opacity', !filled && 'opacity-25')}
                   style={{ background: pane.color }}
                 />
-              )}
-            </button>
+                {labelFor(pane.id)}
+                {active && (
+                  <span
+                    className="absolute inset-x-1.5 -bottom-px h-0.5 rounded-full"
+                    style={{ background: pane.color }}
+                  />
+                )}
+              </button>
             );
           })}
 
-        {project.modules.map((module) => (
-          <ModuleTab
-            key={module.id}
-            module={module}
-            active={module.id === activePane}
-            onSelect={() => setActivePane(module.id)}
-            onRename={(name) => renameModule(module.id, name)}
-            onRemove={() => removeModule(module.id)}
-          />
-        ))}
+          {project.modules.map((module) => (
+            <ModuleTab
+              key={module.id}
+              module={module}
+              active={module.id === activePane}
+              onSelect={() => setActivePane(module.id)}
+              onRename={(name) => renameModule(module.id, name)}
+              onRemove={() => removeModule(module.id)}
+            />
+          ))}
 
-        <Tooltip content="Add a module the JS pane can import">
-          <button
-            onClick={() => addModule()}
-            aria-label="Add a module"
-            className="inline-flex items-center px-2 text-faint transition-colors hover:text-ink"
-          >
-            <Plus size={14} />
-          </button>
-        </Tooltip>
+          <Tooltip content="Add a module the JS pane can import">
+            <button
+              onClick={() => addModule()}
+              aria-label="Add a module"
+              className="inline-flex shrink-0 items-center px-2 text-faint transition-colors hover:text-ink"
+            >
+              <Plus size={14} />
+            </button>
+          </Tooltip>
+        </div>
 
-        <div className="ml-auto flex items-center gap-0.5">
+        <div className="flex shrink-0 items-center gap-0.5 border-l border-line pr-1.5 pl-1">
           {languageChip()}
           <IconButton label="Format this pane (Shift+Alt+F)" onClick={() => format(activePane)}>
             <WandSparkles size={14} />
@@ -284,19 +299,19 @@ function ModuleTab({
           }
         }}
         aria-label="Module name"
-        className="my-1.5 w-28 rounded border border-accent/60 bg-canvas px-1.5 text-[12.5px] outline-none"
+        className="my-1.5 w-28 shrink-0 rounded border border-accent/60 bg-canvas px-1.5 text-[12.5px] outline-none"
       />
     );
   }
 
   return (
-    <div className="group relative inline-flex items-center">
+    <div data-tab={module.id} className="group relative inline-flex shrink-0 items-center">
       <button
         onClick={onSelect}
         onDoubleClick={() => setEditing(true)}
         title={`${module.name} — double-click to rename`}
         className={clsx(
-          'inline-flex items-center gap-1.5 py-0 pr-1 pl-3 text-[12.5px] font-medium transition-colors',
+          'inline-flex items-center gap-1.5 py-0 pr-1 pl-3 text-[12.5px] font-medium whitespace-nowrap transition-colors',
           active ? 'text-ink' : 'text-faint hover:text-muted',
         )}
       >
@@ -313,7 +328,12 @@ function ModuleTab({
       <button
         onClick={onRemove}
         aria-label={`Remove ${module.name}`}
-        className="mr-1.5 rounded p-0.5 text-faint opacity-0 transition-opacity group-hover:opacity-100 hover:text-danger focus-visible:opacity-100"
+        className={clsx(
+          // Touch has no hover to reveal this with, so it stays put there.
+          'mr-1 grid size-5 shrink-0 place-items-center rounded text-faint transition-opacity hover:text-danger focus-visible:opacity-100',
+          'pointer-coarse:opacity-100',
+          active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
+        )}
       >
         <X size={12} />
       </button>
@@ -344,7 +364,7 @@ function Chip({
       <button
         onClick={onClick}
         className={clsx(
-          'inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-[11.5px] font-medium transition-colors',
+          'inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md px-2 text-[11.5px] font-medium whitespace-nowrap transition-colors',
           active ? 'bg-accent/15 text-accent' : 'text-faint hover:text-ink',
         )}
       >

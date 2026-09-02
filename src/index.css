@@ -70,6 +70,25 @@ html[data-theme='light'] {
     height: 100%;
   }
 
+  /* Mobile Safari resolves percentage heights against the layout viewport,
+     which stays as tall as the window with its toolbars collapsed. The app
+     ended up taller than the visible area, so the footer sat below the fold
+     and the document scrolled behind it. */
+  @supports (height: 100dvh) {
+    html,
+    body,
+    #root {
+      height: 100dvh;
+    }
+  }
+
+  /* Nothing outside the app shell is ever meant to scroll. */
+  html,
+  body {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
   body {
     margin: 0;
     background: var(--c-canvas);
@@ -77,7 +96,6 @@ html[data-theme='light'] {
     font-family: var(--font-sans);
     font-size: 14px;
     -webkit-font-smoothing: antialiased;
-    overscroll-behavior: none;
   }
 
   button {

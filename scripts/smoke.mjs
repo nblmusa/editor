@@ -579,9 +579,91 @@ await step('shared pens cannot reach host storage', async () => {
 });
 
 await step('mobile layout renders', async () => {
-  await page.setViewport({ width: 420, height: 860, deviceScaleFactor: 2, isMobile: true });
+  await page.setViewport({
+    width: 420,
+    height: 860,
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+  });
   await new Promise((r) => setTimeout(r, 800));
   await shot('08-mobile');
+});
+
+await step('modules do not squeeze the mobile tab strip', async () => {
+  const widthOfJsTab = () =>
+    page.$eval('[data-tab="js"]', (n) => n.getBoundingClientRect().width);
+  const before = await widthOfJsTab();
+
+  for (let i = 0; i < 5; i++) {
+    await page.locator('[aria-label="Add a module"]').click();
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  await shot('21-mobile-tabs');
+
+  const after = await widthOfJsTab();
+  if (Math.abs(after - before) > 1) {
+    throw new Error(`the JS tab was squeezed from ${before}px to ${after}px`);
+  }
+
+  const strip = await page.$eval('[data-tab="js"]', (n) => {
+    const el = n.parentElement;
+    return { scrollWidth: el.scrollWidth, clientWidth: el.clientWidth };
+  });
+  if (strip.scrollWidth <= strip.clientWidth) {
+    throw new Error('the crowded tab strip never became scrollable');
+  }
+
+  // The chip and the format button live outside the scroller precisely so a
+  // long row of modules cannot push them off the edge.
+  const viewport = await page.evaluate(() => window.innerWidth);
+  const wand = await page.$eval('[aria-label^="Format this pane"]', (n) => {
+    const box = n.getBoundingClientRect();
+    return { right: box.right, width: box.width };
+  });
+  if (wand.width === 0 || wand.right > viewport + 1) {
+    throw new Error(`the format button was pushed out of view: ${JSON.stringify(wand)}`);
+  }
+});
+
+await step('module tabs can be closed by touch', async () => {
+  const opacities = await page.$$eval('[aria-label^="Remove"]', (nodes) =>
+    nodes.map((n) => getComputedStyle(n).opacity),
+  );
+  if (!opacities.some((o) => Number(o) === 1)) {
+    throw new Error(`every remove button is invisible on touch: ${JSON.stringify(opacities)}`);
+  }
+
+  const before = opacities.length;
+  await page.locator('[aria-label^="Remove"]').click();
+  await new Promise((r) => setTimeout(r, 400));
+  const after = await page.$$eval('[aria-label^="Remove"]', (nodes) => nodes.length);
+  if (after !== before - 1) throw new Error(`closing a module left ${after} of ${before} tabs`);
+});
+
+await step('the page itself never scrolls on mobile', async () => {
+  const box = await page.evaluate(() => {
+    window.scrollTo(0, 600);
+    const de = document.documentElement;
+    return {
+      offset: window.scrollY || de.scrollTop || document.body.scrollTop,
+      scrollHeight: de.scrollHeight,
+      inner: window.innerHeight,
+    };
+  });
+  if (box.offset !== 0) throw new Error(`the document scrolled by ${box.offset}px`);
+  if (box.scrollHeight > box.inner + 1) {
+    throw new Error(`the app is ${box.scrollHeight}px tall in a ${box.inner}px viewport`);
+  }
+
+  // The footer has to be the last thing on screen, not floating above a gap.
+  const gap = await page.evaluate(() => {
+    const nav = document.querySelector('nav');
+    return nav ? Math.round(window.innerHeight - nav.getBoundingClientRect().bottom) : null;
+  });
+  if (gap === null) throw new Error('the mobile tab bar is missing');
+  if (gap > 1) throw new Error(`${gap}px of dead space below the mobile tab bar`);
+
   await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 2 });
   await new Promise((r) => setTimeout(r, 500));
 });

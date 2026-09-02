@@ -35,7 +35,14 @@
       body {
         margin: 0;
         height: 100%;
+        overflow: hidden;
         background: #0c0e13;
+      }
+      @supports (height: 100dvh) {
+        html,
+        body {
+          height: 100dvh;
+        }
       }
       html[data-theme='light'],
       html[data-theme='light'] body {
