@@ -8,6 +8,7 @@ import {
   FileCode,
   FilePlus2,
   FolderOpen,
+  History,
   Keyboard,
   LayoutPanelLeft,
   Link2,
@@ -32,7 +33,9 @@ import { downloadHtml, downloadZip, exportJson, importJson } from '@/lib/exporte
 import { Button, IconButton, Menu, SegmentedControl, toast, Tooltip } from './ui';
 
 interface Props {
-  onOpenDialog: (id: 'projects' | 'templates' | 'libraries' | 'settings' | 'shortcuts') => void;
+  onOpenDialog: (
+    id: 'projects' | 'templates' | 'libraries' | 'settings' | 'shortcuts' | 'history',
+  ) => void;
   onOpenPalette: () => void;
 }
 
@@ -201,8 +204,8 @@ export function Header({ onOpenDialog, onOpenPalette }: Props) {
         <Tooltip content="Save to this browser (Mod-S)">
           <Button
             variant="subtle"
-            onClick={() => {
-              save();
+            onClick={async () => {
+              await save();
               toast('Pen saved');
             }}
             className="hidden sm:inline-flex"
@@ -243,6 +246,12 @@ export function Header({ onOpenDialog, onOpenPalette }: Props) {
               icon: <FolderOpen size={15} />,
               shortcut: 'Mod-O',
               onSelect: () => onOpenDialog('projects'),
+            },
+            {
+              id: 'history',
+              label: 'History…',
+              icon: <History size={15} />,
+              onSelect: () => onOpenDialog('history'),
             },
             'separator',
             {

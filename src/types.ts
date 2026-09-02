@@ -23,6 +23,21 @@ export interface Project {
   updatedAt: number;
 }
 
+export type RevisionReason = 'save' | 'auto' | 'replace' | 'restore';
+
+export interface Revision {
+  id: string;
+  penId: string;
+  title: string;
+  html: string;
+  css: string;
+  js: string;
+  libraries: Library[];
+  jsFlavor: JsFlavor;
+  reason: RevisionReason;
+  at: number;
+}
+
 export type ThemeName = 'dark' | 'light' | 'system';
 export type SplitDirection = 'horizontal' | 'vertical';
 export type ViewMode = 'both' | 'editor' | 'preview';
@@ -42,7 +57,6 @@ export interface Settings {
   keymap: Keymap;
   editorLayout: EditorLayout;
   splitDirection: SplitDirection;
-  previewWidth: number | null;
 }
 
 export type ConsoleLevel =

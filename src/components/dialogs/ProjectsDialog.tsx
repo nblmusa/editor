@@ -36,8 +36,8 @@ export function ProjectsDialog({ open, onClose }: { open: boolean; onClose: () =
       footer={
         <Button
           variant="primary"
-          onClick={() => {
-            saveProject();
+          onClick={async () => {
+            await saveProject();
             toast('Current pen saved');
           }}
         >
@@ -66,8 +66,8 @@ export function ProjectsDialog({ open, onClose }: { open: boolean; onClose: () =
               className="group flex items-center gap-3 rounded-lg border border-line bg-elevated px-3 py-2.5"
             >
               <button
-                onClick={() => {
-                  openProject(project.id);
+                onClick={async () => {
+                  await openProject(project.id);
                   onClose();
                 }}
                 className="min-w-0 flex-1 text-left"
@@ -88,17 +88,23 @@ export function ProjectsDialog({ open, onClose }: { open: boolean; onClose: () =
               </button>
 
               <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                <IconButton label="Open" onClick={() => (openProject(project.id), onClose())}>
+                <IconButton
+                  label="Open"
+                  onClick={async () => {
+                    await openProject(project.id);
+                    onClose();
+                  }}
+                >
                   <FolderOpen size={14} />
                 </IconButton>
-                <IconButton label="Duplicate" onClick={() => duplicateProject(project.id)}>
+                <IconButton label="Duplicate" onClick={() => void duplicateProject(project.id)}>
                   <Copy size={14} />
                 </IconButton>
                 <IconButton
                   label="Delete"
                   onClick={() => {
                     if (confirm(`Delete “${project.title}”? This cannot be undone.`)) {
-                      deleteProject(project.id);
+                      void deleteProject(project.id);
                     }
                   }}
                   className="hover:text-danger"

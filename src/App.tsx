@@ -8,6 +8,7 @@ import {
   FileCode,
   FilePlus2,
   FolderOpen,
+  History,
   Info,
   Keyboard,
   LayoutGrid,
@@ -41,11 +42,14 @@ import { ProjectsDialog } from '@/components/dialogs/ProjectsDialog';
 import { LibrariesDialog } from '@/components/dialogs/LibrariesDialog';
 import { SettingsDialog } from '@/components/dialogs/SettingsDialog';
 import { ShortcutsDialog } from '@/components/dialogs/ShortcutsDialog';
+import { HistoryDialog } from '@/components/dialogs/HistoryDialog';
+import { UpdateBanner } from '@/components/UpdateBanner';
 import { Toaster, toast } from '@/components/ui';
 
-type DialogId = 'projects' | 'templates' | 'libraries' | 'settings' | 'shortcuts' | null;
+type DialogId = 'projects' | 'templates' | 'libraries' | 'settings' | 'shortcuts' | 'history' | null;
 
 export default function App() {
+  const hydrated = useAppStore((s) => s.hydrated);
   const project = useAppStore((s) => s.project);
   const settings = useAppStore((s) => s.settings);
   const view = useAppStore((s) => s.view);
@@ -76,8 +80,13 @@ export default function App() {
   const closeDialog = useCallback(() => setDialog(null), []);
 
   useEffect(() => {
-    document.getElementById('boot')?.remove();
+    void useAppStore.getState().hydrate();
   }, []);
+
+  useEffect(() => {
+    // Leave the boot splash up until stored work has been read back.
+    if (hydrated) document.getElementById('boot')?.remove();
+  }, [hydrated]);
 
   useEffect(() => {
     document.title = `${project.title || 'Untitled'} — Editor`;
@@ -94,8 +103,8 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  const save = useCallback(() => {
-    saveProject();
+  const save = useCallback(async () => {
+    await saveProject();
     toast('Pen saved');
   }, [saveProject]);
 
@@ -196,6 +205,14 @@ export default function App() {
         label: theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme',
         icon: <Palette size={15} />,
         run: () => updateSettings({ theme: theme === 'dark' ? 'light' : 'dark' }),
+      },
+      {
+        id: 'history',
+        group: 'Pen',
+        label: 'History and snapshots',
+        icon: <History size={15} />,
+        keywords: 'revision undo restore version',
+        run: () => setDialog('history'),
       },
       { id: 'settings', group: 'App', label: 'Settings', shortcut: 'Mod-,', icon: <Settings2 size={15} />, run: () => setDialog('settings') },
       { id: 'shortcuts', group: 'App', label: 'Keyboard shortcuts', icon: <Keyboard size={15} />, run: () => setDialog('shortcuts') },
@@ -345,6 +362,9 @@ export default function App() {
       {dialog === 'libraries' && <LibrariesDialog open onClose={closeDialog} />}
       {dialog === 'settings' && <SettingsDialog open onClose={closeDialog} />}
       {dialog === 'shortcuts' && <ShortcutsDialog open onClose={closeDialog} />}
+      {dialog === 'history' && <HistoryDialog open onClose={closeDialog} />}
+
+      <UpdateBanner />
       <Toaster />
     </div>
   );

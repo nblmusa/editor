@@ -21,13 +21,19 @@ const browser = await puppeteer.launch({
 const page = await browser.newPage();
 const problems = [];
 
-page.on('pageerror', (err) => problems.push(`pageerror: ${err.message}`));
+// Offline checks deliberately break requests, so collection pauses for them.
+let collecting = true;
+const collect = (problem) => {
+  if (collecting) problems.push(problem);
+};
+
+page.on('pageerror', (err) => collect(`pageerror: ${err.message}`));
 page.on('console', (msg) => {
-  if (msg.type() === 'error') problems.push(`console.error: ${msg.text()}`);
+  if (msg.type() === 'error') collect(`console.error: ${msg.text()}`);
 });
 page.on('requestfailed', (req) => {
   const url = req.url();
-  if (url.startsWith('http://localhost')) problems.push(`requestfailed: ${url}`);
+  if (url.startsWith('http://localhost')) collect(`requestfailed: ${url}`);
 });
 
 const step = async (name, fn) => {
@@ -287,6 +293,64 @@ await step('saving and reopening a pen persists it', async () => {
   if (count < 1) throw new Error('no saved pens listed');
   await shot('09-projects');
   await page.keyboard.press('Escape');
+});
+
+await step('history records snapshots and restores one', async () => {
+  await palette('history');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('[aria-label="History"]', { timeout: 4000 });
+
+  const snapshots = await page.$$eval('[aria-label="History"] li', (nodes) => nodes.length);
+  if (snapshots < 1) throw new Error('saving did not produce a snapshot');
+
+  await page.click('[aria-label="History"] li button');
+  await new Promise((r) => setTimeout(r, 300));
+  await shot('14-history');
+
+  const [restore] = await page.$$('[aria-label="History"] button ::-p-text(Restore)');
+  if (!restore) throw new Error('no restore control for the selected snapshot');
+  await restore.click();
+  await new Promise((r) => setTimeout(r, 600));
+
+  const stillOpen = await page.$('[aria-label="History"]');
+  if (stillOpen) throw new Error('restoring did not close the dialog');
+});
+
+await step('pens survive a reload from IndexedDB', async () => {
+  await page.reload({ waitUntil: 'networkidle2' });
+  await page.waitForFunction(() => !document.getElementById('boot'), { timeout: 15000 });
+  const stored = await page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const request = indexedDB.open('editor');
+        request.onsuccess = () => {
+          const database = request.result;
+          const all = database.transaction('pens').objectStore('pens').getAll();
+          all.onsuccess = () => resolve(all.result.length);
+          all.onerror = () => resolve(-1);
+        };
+        request.onerror = () => resolve(-1);
+      }),
+  );
+  if (typeof stored !== 'number' || stored < 1) {
+    throw new Error(`expected saved pens in IndexedDB, found ${stored}`);
+  }
+});
+
+await step('the app boots with no network', async () => {
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  collecting = false;
+  await page.setOfflineMode(true);
+  try {
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => !document.getElementById('boot'), { timeout: 15000 });
+    await page.waitForSelector('.cm-content', { timeout: 10000 });
+    await shot('15-offline');
+  } finally {
+    await page.setOfflineMode(false);
+    await new Promise((r) => setTimeout(r, 500));
+    collecting = true;
+  }
 });
 
 await step('libraries dialog adds a CDN entry', async () => {
