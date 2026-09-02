@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Library, PaneId, Project, Revision, Settings, ViewMode } from '@/types';
+import type { Library, PaneId, PaneKey, Project, Revision, Settings, ViewMode } from '@/types';
 import {
   migrateLegacyData,
   penStore,
@@ -7,7 +7,13 @@ import {
   revisionStore,
   settingsStore,
 } from '@/lib/storage';
-import { createProject, defaultProject, projectFromTemplate, uid } from '@/lib/project';
+import {
+  createProject,
+  defaultProject,
+  normalizeModuleName,
+  projectFromTemplate,
+  uid,
+} from '@/lib/project';
 import { consumeSharedProject } from '@/lib/share';
 import type { Template } from '@/lib/templates';
 
@@ -35,7 +41,7 @@ interface AppState {
   revisions: Revision[];
   settings: Settings;
 
-  activePane: PaneId;
+  activePane: PaneKey;
   view: ViewMode;
   splitRatio: number;
   consoleOpen: boolean;
@@ -49,9 +55,13 @@ interface AppState {
   hydrate: () => Promise<void>;
   revealAt: (pane: PaneId, pos: number) => void;
 
-  setCode: (pane: PaneId, value: string) => void;
+  setCode: (pane: PaneKey, value: string) => void;
   setTitle: (title: string) => void;
-  setActivePane: (pane: PaneId) => void;
+  setActivePane: (pane: PaneKey) => void;
+
+  addModule: (name?: string) => void;
+  renameModule: (id: string, name: string) => void;
+  removeModule: (id: string) => void;
   setView: (view: ViewMode) => void;
   setSplitRatio: (ratio: number) => void;
   toggleConsole: (open?: boolean) => void;
@@ -136,12 +146,68 @@ export const useAppStore = create<AppState>()((set, get) => ({
 
   setCode: (pane, value) =>
     set((state) => {
-      if (state.project[pane] === value) return state;
+      const { project } = state;
+      const touched = { updatedAt: Date.now() };
+      const pending = { pendingChanges: !state.settings.autoRun };
+
+      if (pane === 'html' || pane === 'css' || pane === 'js') {
+        if (project[pane] === value) return state;
+        return { project: { ...project, [pane]: value, ...touched }, ...pending };
+      }
+
+      const module = project.modules.find((m) => m.id === pane);
+      if (!module || module.code === value) return state;
       return {
-        project: { ...state.project, [pane]: value, updatedAt: Date.now() },
-        pendingChanges: !state.settings.autoRun,
+        project: {
+          ...project,
+          modules: project.modules.map((m) => (m.id === pane ? { ...m, code: value } : m)),
+          ...touched,
+        },
+        ...pending,
       };
     }),
+
+  addModule: (name) =>
+    set((state) => {
+      const taken = state.project.modules.map((m) => m.name);
+      const module = {
+        id: uid(),
+        name: normalizeModuleName(name ?? 'utils.js', taken),
+        code: '',
+      };
+      return {
+        project: {
+          ...state.project,
+          modules: [...state.project.modules, module],
+          updatedAt: Date.now(),
+        },
+        activePane: module.id,
+      };
+    }),
+
+  renameModule: (id, name) =>
+    set((state) => {
+      const taken = state.project.modules.filter((m) => m.id !== id).map((m) => m.name);
+      return {
+        project: {
+          ...state.project,
+          modules: state.project.modules.map((m) =>
+            m.id === id ? { ...m, name: normalizeModuleName(name, taken) } : m,
+          ),
+          updatedAt: Date.now(),
+        },
+      };
+    }),
+
+  removeModule: (id) =>
+    set((state) => ({
+      project: {
+        ...state.project,
+        modules: state.project.modules.filter((m) => m.id !== id),
+        updatedAt: Date.now(),
+      },
+      activePane: state.activePane === id ? 'js' : state.activePane,
+    })),
 
   setTitle: (title) => set((state) => ({ project: { ...state.project, title } })),
   setActivePane: (activePane) => set({ activePane }),

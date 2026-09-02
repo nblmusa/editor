@@ -1,7 +1,7 @@
 import clsx from 'clsx';
 import { Package, Zap, ZapOff } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import { PANES, paneLabel } from './EditorArea';
+import { codeOf, PANES, paneLabel } from './EditorArea';
 import { Tooltip } from './ui';
 
 export function StatusBar({ onOpenLibraries }: { onOpenLibraries: () => void }) {
@@ -10,14 +10,14 @@ export function StatusBar({ onOpenLibraries }: { onOpenLibraries: () => void }) 
   const settings = useAppStore((s) => s.settings);
   const updateSettings = useAppStore((s) => s.updateSettings);
 
-  const pane = PANES.find((p) => p.id === activePane)!;
-  const source = project[activePane];
+  const source = codeOf(project, activePane);
   const lines = source ? source.split('\n').length : 0;
+  const color = PANES.find((p) => p.id === activePane)?.color ?? '#c792ea';
 
   return (
     <footer className="flex h-7 shrink-0 items-center gap-3 border-t border-line bg-surface px-3 text-[11.5px] text-faint">
       <span className="flex items-center gap-1.5">
-        <span className="size-1.5 rounded-full" style={{ background: pane.color }} />
+        <span className="size-1.5 rounded-full" style={{ background: color }} />
         {paneLabel(activePane, project)}
       </span>
       <span>

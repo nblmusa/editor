@@ -1,7 +1,7 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import clsx from 'clsx';
-import { Braces, FileCode2, Palette, Sparkles, WandSparkles } from 'lucide-react';
-import type { PaneId, Project } from '@/types';
+import { Braces, FileCode2, Palette, Plus, Sparkles, WandSparkles, X } from 'lucide-react';
+import type { PaneId, PaneKey, PenModule, Project } from '@/types';
 import { useAppStore } from '@/store/useAppStore';
 import { formatCode } from '@/lib/format';
 import { CodeEditor } from './CodeEditor';
@@ -13,11 +13,21 @@ export const PANES: { id: PaneId; label: string; icon: typeof FileCode2; color: 
   { id: 'js', label: 'JS', icon: Braces, color: '#ffcb6b' },
 ];
 
+export function isMainPane(pane: PaneKey): pane is PaneId {
+  return pane === 'html' || pane === 'css' || pane === 'js';
+}
+
+export function codeOf(project: Project, pane: PaneKey): string {
+  if (isMainPane(pane)) return project[pane];
+  return project.modules.find((m) => m.id === pane)?.code ?? '';
+}
+
 /** Tab labels follow the preprocessor a pane is set to. */
-export function paneLabel(pane: PaneId, project: Pick<Project, 'htmlLang' | 'cssLang'>): string {
+export function paneLabel(pane: PaneKey, project: Pick<Project, 'htmlLang' | 'cssLang' | 'modules'>): string {
   if (pane === 'html') return project.htmlLang === 'markdown' ? 'MD' : 'HTML';
   if (pane === 'css') return project.cssLang === 'scss' ? 'SCSS' : 'CSS';
-  return 'JS';
+  if (pane === 'js') return 'JS';
+  return project.modules.find((m) => m.id === pane)?.name ?? 'JS';
 }
 
 export function useFormatPane() {
@@ -26,16 +36,18 @@ export function useFormatPane() {
   const setCode = useAppStore((s) => s.setCode);
 
   return useCallback(
-    async (pane: PaneId) => {
+    async (pane: PaneKey) => {
       const langs = { htmlLang: project.htmlLang, cssLang: project.cssLang };
+      const source = codeOf(project, pane);
+      const label = paneLabel(pane, project);
       try {
-        const formatted = await formatCode(project[pane], pane, tabSize, langs);
-        if (formatted !== project[pane]) {
+        const formatted = await formatCode(source, isMainPane(pane) ? pane : 'js', tabSize, langs);
+        if (formatted !== source) {
           setCode(pane, formatted);
-          toast(`Formatted ${pane.toUpperCase()}`);
+          toast(`Formatted ${label}`);
         }
       } catch {
-        toast(`${pane.toUpperCase()} could not be formatted — check for syntax errors.`, 'error');
+        toast(`${label} could not be formatted — check for syntax errors.`, 'error');
       }
     },
     [project, tabSize, setCode],
@@ -57,6 +69,9 @@ export function EditorArea({ dark, onRun, onSave }: Props) {
   const setJsFlavor = useAppStore((s) => s.setJsFlavor);
   const setHtmlLang = useAppStore((s) => s.setHtmlLang);
   const setCssLang = useAppStore((s) => s.setCssLang);
+  const addModule = useAppStore((s) => s.addModule);
+  const renameModule = useAppStore((s) => s.renameModule);
+  const removeModule = useAppStore((s) => s.removeModule);
   const reveal = useAppStore((s) => s.reveal);
   const format = useFormatPane();
 
@@ -74,10 +89,12 @@ export function EditorArea({ dark, onRun, onSave }: Props) {
 
   const labelFor = (pane: PaneId) => paneLabel(pane, project);
 
-  const editor = (pane: PaneId, visible = true) => (
+  const editor = (pane: PaneKey, visible = true) => (
     <CodeEditor
-      pane={pane}
-      value={project[pane]}
+      pane={isMainPane(pane) ? pane : 'js'}
+      paneKey={pane}
+      key={pane}
+      value={codeOf(project, pane)}
       onChange={(value) => setCode(pane, value)}
       settings={settings}
       dark={dark}
@@ -180,8 +197,29 @@ export function EditorArea({ dark, onRun, onSave }: Props) {
                 />
               )}
             </button>
-          );
-        })}
+            );
+          })}
+
+        {project.modules.map((module) => (
+          <ModuleTab
+            key={module.id}
+            module={module}
+            active={module.id === activePane}
+            onSelect={() => setActivePane(module.id)}
+            onRename={(name) => renameModule(module.id, name)}
+            onRemove={() => removeModule(module.id)}
+          />
+        ))}
+
+        <Tooltip content="Add a module the JS pane can import">
+          <button
+            onClick={() => addModule()}
+            aria-label="Add a module"
+            className="inline-flex items-center px-2 text-faint transition-colors hover:text-ink"
+          >
+            <Plus size={14} />
+          </button>
+        </Tooltip>
 
         <div className="ml-auto flex items-center gap-0.5">
           {languageChip()}
@@ -193,12 +231,95 @@ export function EditorArea({ dark, onRun, onSave }: Props) {
 
       <div className="min-h-0 flex-1">
         {/* Keeping every pane mounted preserves undo history and scroll position. */}
-        {PANES.map((pane) => (
-          <div key={pane.id} className={clsx('h-full', pane.id !== activePane && 'hidden')}>
-            {editor(pane.id, pane.id === activePane)}
+        {[...PANES.map((p) => p.id), ...project.modules.map((m) => m.id)].map((key) => (
+          <div key={key} className={clsx('h-full', key !== activePane && 'hidden')}>
+            {editor(key, key === activePane)}
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+const MODULE_COLOR = '#c792ea';
+
+function ModuleTab({
+  module,
+  active,
+  onSelect,
+  onRename,
+  onRemove,
+}: {
+  module: PenModule;
+  active: boolean;
+  onSelect: () => void;
+  onRename: (name: string) => void;
+  onRemove: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(module.name);
+
+  const commit = () => {
+    setEditing(false);
+    if (draft.trim() && draft !== module.name) onRename(draft);
+    else setDraft(module.name);
+  };
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') {
+            setDraft(module.name);
+            setEditing(false);
+          }
+        }}
+        aria-label="Module name"
+        className="my-1.5 w-28 rounded border border-accent/60 bg-canvas px-1.5 text-[12.5px] outline-none"
+      />
+    );
+  }
+
+  return (
+    <div className="group relative inline-flex items-center">
+      <button
+        onClick={onSelect}
+        onDoubleClick={() => setEditing(true)}
+        title={`${module.name} — double-click to rename`}
+        className={clsx(
+          'inline-flex items-center gap-1.5 py-0 pr-1 pl-3 text-[12.5px] font-medium transition-colors',
+          active ? 'text-ink' : 'text-faint hover:text-muted',
+        )}
+      >
+        <span
+          className={clsx(
+            'size-1.5 rounded-full transition-opacity',
+            !module.code.trim() && 'opacity-25',
+          )}
+          style={{ background: MODULE_COLOR }}
+        />
+        {module.name}
+      </button>
+
+      <button
+        onClick={onRemove}
+        aria-label={`Remove ${module.name}`}
+        className="mr-1.5 rounded p-0.5 text-faint opacity-0 transition-opacity group-hover:opacity-100 hover:text-danger focus-visible:opacity-100"
+      >
+        <X size={12} />
+      </button>
+
+      {active && (
+        <span
+          className="absolute inset-x-1.5 bottom-0 h-0.5 rounded-full"
+          style={{ background: MODULE_COLOR }}
+        />
+      )}
     </div>
   );
 }

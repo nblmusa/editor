@@ -79,6 +79,7 @@ export const revisionStore = {
       html: pen.html,
       css: pen.css,
       js: pen.js,
+      modules: pen.modules,
       libraries: pen.libraries,
       jsFlavor: pen.jsFlavor,
       htmlLang: pen.htmlLang,

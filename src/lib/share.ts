@@ -2,6 +2,7 @@ import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from
 import type { Library, Project } from '@/types';
 import { createProject } from './project';
 
+
 /** Short keys keep shared URLs compact. */
 interface Payload {
   v: 1;
@@ -11,6 +12,9 @@ interface Payload {
   j: string;
   f?: 'babel';
   l?: [string, string, 'js' | 'css'][];
+  m?: [string, string][];
+  hl?: 'markdown';
+  cl?: 'scss';
 }
 
 const PREFIX = '#pen=';
@@ -24,8 +28,13 @@ export function encodeProject(project: Project): string {
     j: project.js,
   };
   if (project.jsFlavor === 'babel') payload.f = 'babel';
+  if (project.htmlLang === 'markdown') payload.hl = 'markdown';
+  if (project.cssLang === 'scss') payload.cl = 'scss';
   if (project.libraries.length) {
     payload.l = project.libraries.map((l) => [l.name, l.url, l.kind]);
+  }
+  if (project.modules.length) {
+    payload.m = project.modules.map((m) => [m.name, m.code]);
   }
   return compressToEncodedURIComponent(JSON.stringify(payload));
 }
@@ -50,7 +59,14 @@ export function decodeProject(encoded: string): Project | null {
       css: payload.c ?? '',
       js: payload.j ?? '',
       jsFlavor: payload.f === 'babel' ? 'babel' : 'javascript',
+      htmlLang: payload.hl === 'markdown' ? 'markdown' : 'html',
+      cssLang: payload.cl === 'scss' ? 'scss' : 'css',
       libraries,
+      modules: (payload.m ?? []).map(([name, code], i) => ({
+        id: `shared-module-${i}`,
+        name,
+        code,
+      })),
     });
   } catch {
     return null;

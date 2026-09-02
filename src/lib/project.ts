@@ -13,6 +13,7 @@ export function createProject(partial: Partial<Project> = {}): Project {
     html: '',
     css: '',
     js: '',
+    modules: [],
     libraries: [],
     jsFlavor: 'javascript',
     htmlLang: 'html',
@@ -29,6 +30,7 @@ export function projectFromTemplate(template: Template): Project {
     html: template.html,
     css: template.css,
     js: template.js,
+    modules: (template.modules ?? []).map((module) => ({ ...module, id: uid() })),
     libraries: template.libraries ?? [],
     jsFlavor: template.jsFlavor ?? 'javascript',
     htmlLang: template.htmlLang ?? 'html',
@@ -38,6 +40,25 @@ export function projectFromTemplate(template: Template): Project {
 
 export function defaultProject(): Project {
   return projectFromTemplate(defaultTemplate);
+}
+
+/** Keeps module names unique and safe to use as an import specifier. */
+export function normalizeModuleName(raw: string, taken: string[]): string {
+  let name = raw
+    .trim()
+    .replace(/^\.?\//, '')
+    .replace(/[^a-zA-Z0-9._-]/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  if (!name) name = 'module';
+  if (!/\.[a-z]+$/i.test(name)) name += '.js';
+
+  if (!taken.includes(name)) return name;
+
+  const [, base, extension] = /^(.*?)(\.[a-z]+)$/i.exec(name) ?? [, name, ''];
+  let n = 2;
+  while (taken.includes(`${base}-${n}${extension}`)) n++;
+  return `${base}-${n}${extension}`;
 }
 
 export function isEmpty(project: Project): boolean {

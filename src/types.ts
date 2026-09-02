@@ -1,5 +1,15 @@
 export type PaneId = 'html' | 'css' | 'js';
 
+/** An extra ES module that the JS pane can import by name. */
+export interface PenModule {
+  id: string;
+  name: string;
+  code: string;
+}
+
+/** Either one of the three main panes or the id of a module. */
+export type PaneKey = PaneId | string;
+
 export type LibraryKind = 'js' | 'css';
 
 export interface Library {
@@ -19,6 +29,7 @@ export interface Project {
   html: string;
   css: string;
   js: string;
+  modules: PenModule[];
   libraries: Library[];
   jsFlavor: JsFlavor;
   htmlLang: HtmlLang;
@@ -36,6 +47,7 @@ export interface Revision {
   html: string;
   css: string;
   js: string;
+  modules: PenModule[];
   libraries: Library[];
   jsFlavor: JsFlavor;
   htmlLang: HtmlLang;

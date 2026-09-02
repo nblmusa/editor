@@ -1,6 +1,7 @@
 import type { Project } from '@/types';
 import { PREVIEW_BRIDGE } from './previewBridge';
 import { annotateHtml } from './annotateHtml';
+import { MODULE_LOADER } from './moduleLoader';
 import type { CompileResult } from './compile';
 
 const BABEL_CDN = 'https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js';
@@ -53,9 +54,19 @@ export function buildSrcDoc(
   // Offsets only mean something when the pane holds the markup verbatim.
   const body = project.htmlLang === 'html' ? annotateHtml(compiled.html) : compiled.html;
 
-  const scriptTag = useBabel
-    ? `<script type="text/babel" data-presets="env,react,typescript" data-type="module">\n${escapeClosingTags(project.js)}\n</script>`
-    : `<script type="module">\n${escapeClosingTags(project.js)}\n</script>`;
+  // A pen with extra modules needs the loader to mint blob URLs and an import
+  // map inside the frame; a single-file pen can just run the script directly.
+  const scriptTag = project.modules.length
+    ? [
+        `<script id="__editor_modules" type="application/json">${escapeClosingTags(
+          JSON.stringify(project.modules.map(({ name, code }) => ({ name, code }))),
+        )}</script>`,
+        `<script id="__editor_entry" type="text/plain" data-babel="${useBabel}">\n${escapeClosingTags(project.js)}\n</script>`,
+        MODULE_LOADER,
+      ].join('\n')
+    : useBabel
+      ? `<script type="text/babel" data-presets="env,react,typescript" data-type="module">\n${escapeClosingTags(project.js)}\n</script>`
+      : `<script type="module">\n${escapeClosingTags(project.js)}\n</script>`;
 
   const darkFallback = options.darkPreview
     ? `<style>:root { color-scheme: dark } body:not([style]):not([class]) { background: #16181d; color: #e6e9ef }</style>`
@@ -98,6 +109,7 @@ export function structuralKey(project: Project, compiled: CompileResult): string
     compiled.html,
     project.js,
     project.jsFlavor,
+    project.modules.map((m) => `${m.name}:${m.code}`),
     project.libraries.map((l) => `${l.kind}:${l.url}`),
   ]);
 }
@@ -106,6 +118,18 @@ export function structuralKey(project: Project, compiled: CompileResult): string
 export function buildStandaloneDoc(project: Project, compiled: CompileResult): string {
   const libs = libraryTags(project, 4);
   const useBabel = project.jsFlavor === 'babel';
+
+  const scripts = project.modules.length
+    ? [
+        `    <script id="__editor_modules" type="application/json">${escapeClosingTags(
+          JSON.stringify(project.modules.map(({ name, code }) => ({ name, code }))),
+        )}</script>`,
+        `    <script id="__editor_entry" type="text/plain" data-babel="${useBabel}">\n${indent(escapeClosingTags(project.js), 6)}\n    </script>`,
+        MODULE_LOADER,
+      ].join('\n')
+    : `    <script${useBabel ? ' type="text/babel" data-presets="env,react,typescript"' : ' type="module"'}>
+${indent(escapeClosingTags(project.js), 6)}
+    </script>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -122,9 +146,7 @@ ${indent(compiled.css, 6)}
 ${indent(compiled.html, 4)}
 ${libs.js}
 ${useBabel ? `    <script src="${BABEL_CDN}"></script>` : ''}
-    <script${useBabel ? ' type="text/babel" data-presets="env,react,typescript"' : ' type="module"'}>
-${indent(escapeClosingTags(project.js), 6)}
-    </script>
+${scripts}
   </body>
 </html>
 `;

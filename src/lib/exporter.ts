@@ -57,6 +57,9 @@ ${jsLinks}
   zip.file('style.css', compiled.css);
   zip.file('script.js', project.js);
 
+  // Served from a real origin, the modules resolve as ordinary relative imports.
+  for (const module of project.modules) zip.file(module.name, module.code);
+
   if (project.cssLang !== 'css') zip.file(`source.${project.cssLang}`, project.css);
   if (project.htmlLang !== 'html') zip.file(`source.md`, project.html);
   zip.file(

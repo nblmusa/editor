@@ -297,6 +297,47 @@ await step('markdown and scss compile in the preview', async () => {
   await shot('17-preprocessors');
 });
 
+await step('modules resolve through the import map', async () => {
+  await palette('browse templates');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('[aria-label="Templates"]', { timeout: 4000 });
+  const [card] = await page.$$('button ::-p-text(Multi-file modules)');
+  if (!card) throw new Error('the multi-file template is missing');
+  await card.click();
+  await new Promise((r) => setTimeout(r, 2500));
+
+  const tabs = await page.$$eval('[aria-label^="Remove"]', (nodes) =>
+    nodes.map((n) => n.getAttribute('aria-label')),
+  );
+  if (tabs.length !== 2) throw new Error(`expected two module tabs, saw ${JSON.stringify(tabs)}`);
+
+  const frame = page.frames().find((f) => f !== page.mainFrame());
+  const drew = await frame.evaluate(() => {
+    const canvas = document.getElementById('stage');
+    const ctx = canvas.getContext('2d');
+    const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    return data.some((channel) => channel !== 0);
+  });
+  if (!drew) throw new Error('the imported module never drew to the canvas');
+  await shot('18-modules');
+});
+
+await step('a new module can be added and imported', async () => {
+  await page.locator('[aria-label="Add a module"]').click();
+  await new Promise((r) => setTimeout(r, 400));
+  const added = await page.$$eval('[aria-label^="Remove"]', (nodes) => nodes.length);
+  if (added !== 3) throw new Error(`adding a module produced ${added} tabs`);
+
+  // A fresh module takes focus, so the entry pane has to be reselected.
+  const [jsTab] = await page.$$('button ::-p-text(JS)');
+  await jsTab.click();
+  await typeAtEnd('js', '\nimport "./utils.js";');
+  await new Promise((r) => setTimeout(r, 1800));
+
+  const failed = problems.filter((p) => /Failed to resolve|Cannot find module/.test(p));
+  if (failed.length) throw new Error(`import did not resolve: ${failed[0]}`);
+});
+
 await step('command palette opens and filters', async () => {
   await palette('templ');
   await shot('03-palette');

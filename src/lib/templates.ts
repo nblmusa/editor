@@ -8,6 +8,7 @@ export interface Template {
   html: string;
   css: string;
   js: string;
+  modules?: { name: string; code: string }[];
   libraries?: Library[];
   jsFlavor?: JsFlavor;
   htmlLang?: HtmlLang;
@@ -362,6 +363,93 @@ form.addEventListener('submit', (e) => {
   form.querySelector('.ok').hidden = !valid;
   if (valid) console.log('submitted', Object.fromEntries(new FormData(form)));
 });`,
+  },
+  {
+    id: 'modules',
+    name: 'Multi-file modules',
+    description: 'Split the code across files and import them like any ES module.',
+    tag: 'Structure',
+    html: `<main>
+  <h1>Particles</h1>
+  <canvas id="stage" width="640" height="360"></canvas>
+  <p class="hint">Logic lives in <code>particles.js</code> and <code>random.js</code>.</p>
+</main>`,
+    css: `body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0b0e14; color: #e6e9ef; font-family: system-ui, sans-serif; }
+main { text-align: center; }
+h1 { margin: 0 0 14px; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+canvas { width: min(640px, 88vw); border-radius: 12px; background: #10141d; border: 1px solid rgba(255,255,255,0.07); }
+.hint { margin-top: 12px; font-size: 13px; color: #9aa4b6; }
+code { padding: 2px 5px; border-radius: 4px; background: rgba(255,255,255,0.07); font-size: 0.92em; }`,
+    js: `import { createField } from './particles.js';
+
+const canvas = document.getElementById('stage');
+const field = createField(canvas, 90);
+
+function frame() {
+  field.step();
+  field.draw();
+  requestAnimationFrame(frame);
+}
+
+frame();
+console.log('Running', field.count, 'particles from a separate module.');`,
+    modules: [
+      {
+        name: 'particles.js',
+        code: `import { range, pick } from './random.js';
+
+const COLORS = ['#2dd4bf', '#0ea5e9', '#c792ea', '#f78c6c'];
+
+export function createField(canvas, count) {
+  const ctx = canvas.getContext('2d');
+  const { width, height } = canvas;
+
+  const particles = Array.from({ length: count }, () => ({
+    x: range(0, width),
+    y: range(0, height),
+    vx: range(-0.6, 0.6),
+    vy: range(-0.6, 0.6),
+    r: range(1.5, 4),
+    color: pick(COLORS),
+  }));
+
+  return {
+    count,
+
+    step() {
+      for (const p of particles) {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0 || p.x > width) p.vx *= -1;
+        if (p.y < 0 || p.y > height) p.vy *= -1;
+      }
+    },
+
+    draw() {
+      ctx.clearRect(0, 0, width, height);
+      for (const p of particles) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = 0.8;
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    },
+  };
+}`,
+      },
+      {
+        name: 'random.js',
+        code: `export function range(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+export function pick(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}`,
+      },
+    ],
   },
   {
     id: 'markdown-scss',

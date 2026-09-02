@@ -14,6 +14,8 @@ import {
 
 interface Props {
   pane: PaneId;
+  /** Identifies this editor in the DOM; modules share the `js` language. */
+  paneKey?: string;
   value: string;
   onChange: (value: string) => void;
   settings: Settings;
@@ -30,6 +32,7 @@ interface Props {
 
 export function CodeEditor({
   pane,
+  paneKey,
   value,
   onChange,
   settings,
@@ -163,5 +166,5 @@ export function CodeEditor({
     };
   }, [settings.keymap]);
 
-  return <div ref={host} className="h-full w-full overflow-hidden" data-pane={pane} />;
+  return <div ref={host} className="h-full w-full overflow-hidden" data-pane={paneKey ?? pane} />;
 }
