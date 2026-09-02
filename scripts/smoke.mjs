@@ -3,11 +3,24 @@
  * console errors. Run with: node scripts/smoke.mjs [url]
  */
 import puppeteer from 'puppeteer-core';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 
 const URL = process.argv[2] ?? 'http://localhost:4173/';
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const OUT = '/tmp/editor-shots';
+
+const CHROME_CANDIDATES = [
+  process.env.CHROME_PATH,
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/usr/bin/google-chrome-stable',
+  '/usr/bin/google-chrome',
+  '/usr/bin/chromium',
+];
+
+const CHROME = CHROME_CANDIDATES.find((path) => path && existsSync(path));
+if (!CHROME) {
+  console.error('No Chrome found. Set CHROME_PATH to a browser executable.');
+  process.exit(1);
+}
 
 mkdirSync(OUT, { recursive: true });
 
@@ -137,11 +150,18 @@ await step('console evaluates expressions in the preview', async () => {
   if (!/querySelectorAll/.test(text)) throw new Error('input was not echoed');
 });
 
+const MOD = process.platform === 'darwin' ? 'Meta' : 'Control';
+
+// CodeMirror binds "cursor to end of document" differently per platform.
+const toDocEnd = async () => {
+  await page.keyboard.down(MOD);
+  await page.keyboard.press(process.platform === 'darwin' ? 'ArrowDown' : 'End');
+  await page.keyboard.up(MOD);
+};
+
 const typeAtEnd = async (pane, text) => {
   await page.click(`[data-pane="${pane}"] .cm-content`);
-  await page.keyboard.down('Meta');
-  await page.keyboard.press('ArrowDown');
-  await page.keyboard.up('Meta');
+  await toDocEnd();
   await page.keyboard.type(text);
 };
 
@@ -336,6 +356,49 @@ await step('a new module can be added and imported', async () => {
 
   const failed = problems.filter((p) => /Failed to resolve|Cannot find module/.test(p));
   if (failed.length) throw new Error(`import did not resolve: ${failed[0]}`);
+});
+
+await step('the language service completes DOM members', async () => {
+  const [jsTab] = await page.$$('button ::-p-text(JS)');
+  await jsTab.click();
+  await typeAtEnd('js', '\ndocument.qu');
+
+  // The worker carries several megabytes, so the first answer takes a while.
+  await page.waitForSelector('.cm-tooltip-autocomplete', { timeout: 45000 });
+  const options = await page.$$eval('.cm-tooltip-autocomplete li', (nodes) =>
+    nodes.map((n) => n.textContent),
+  );
+  if (!options.some((option) => option?.includes('querySelector'))) {
+    throw new Error(`no DOM completions offered: ${JSON.stringify(options.slice(0, 8))}`);
+  }
+  await shot('19-intellisense');
+  await page.keyboard.press('Escape');
+
+  const badge = await page.evaluate(() => document.body.textContent?.includes('TS'));
+  if (!badge) throw new Error('the status bar never reported the language service');
+
+  // `document.qu` is not valid on its own; leaving it behind would break the
+  // preview for every step that follows.
+  for (let i = 0; i < 'document.qu'.length; i++) await page.keyboard.press('Backspace');
+});
+
+await step('type errors surface in TypeScript mode', async () => {
+  const [chip] = await page.$$('button ::-p-text(JSX / TS)');
+  await chip.click();
+  await new Promise((r) => setTimeout(r, 600));
+  await typeAtEnd('js', '\nconst typed: number = "not a number";');
+  await page.waitForSelector('.cm-lintRange-error', { timeout: 30000 });
+
+  const message = await page.evaluate(async () => {
+    const marked = document.querySelector('.cm-lintRange-error');
+    marked?.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 800));
+    return document.querySelector('.cm-tooltip-lint')?.textContent ?? '';
+  });
+  if (message && !/not assignable/i.test(message)) {
+    throw new Error(`unexpected diagnostic: ${message}`);
+  }
+  await shot('20-type-error');
 });
 
 await step('command palette opens and filters', async () => {

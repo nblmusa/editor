@@ -81,18 +81,31 @@ export function hasSnapshot(): boolean {
   return latest !== null;
 }
 
-export function requestCompletions(file: string, pos: number): Promise<TsCompletion[]> {
-  return send({ type: 'completions', file, pos });
+export function requestCompletions(
+  file: string,
+  pos: number,
+  code: string,
+): Promise<TsCompletion[]> {
+  return send({ type: 'completions', file, pos, code });
 }
 
-export function requestDetails(file: string, pos: number, name: string): Promise<string> {
-  return send({ type: 'details', file, pos, name });
+export function requestDetails(
+  file: string,
+  pos: number,
+  name: string,
+  code: string,
+): Promise<string> {
+  return send({ type: 'details', file, pos, name, code });
 }
 
-export function requestDiagnostics(file: string): Promise<TsDiagnostic[]> {
-  return send({ type: 'diagnostics', file });
+export function requestDiagnostics(file: string, code: string): Promise<TsDiagnostic[]> {
+  return send({ type: 'diagnostics', file, code });
 }
 
-export function requestQuickInfo(file: string, pos: number): Promise<TsQuickInfo | null> {
-  return send({ type: 'quickinfo', file, pos });
+export function requestQuickInfo(
+  file: string,
+  pos: number,
+  code: string,
+): Promise<TsQuickInfo | null> {
+  return send({ type: 'quickinfo', file, pos, code });
 }

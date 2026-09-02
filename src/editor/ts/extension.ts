@@ -1,5 +1,5 @@
 import { type Extension } from '@codemirror/state';
-import { hoverTooltip } from '@codemirror/view';
+import { hoverTooltip, type EditorView } from '@codemirror/view';
 import {
   autocompletion,
   type CompletionContext,
@@ -11,15 +11,17 @@ import { requestCompletions, requestDetails, requestDiagnostics, requestQuickInf
 /** Completions are requested after a word character, a dot or a trigger key. */
 const TRIGGER = /[\w$]+$|\.$|['"`/]$/;
 
-function source(file: () => string) {
+function completionSource(file: () => string) {
   return async (context: CompletionContext): Promise<CompletionResult | null> => {
     const word = context.matchBefore(TRIGGER);
     if (!word && !context.explicit) return null;
 
     const from = word && /[\w$]/.test(word.text) ? word.from : context.pos;
+    const code = context.state.doc.toString();
+    const name = file();
 
     try {
-      const entries = await requestCompletions(file(), context.pos);
+      const entries = await requestCompletions(name, context.pos, code);
       if (!entries.length) return null;
 
       return {
@@ -30,7 +32,7 @@ function source(file: () => string) {
           type: entry.kind,
           boost: entry.sortText.startsWith('0') ? 1 : 0,
           info: () =>
-            requestDetails(file(), context.pos, entry.name)
+            requestDetails(name, context.pos, entry.name, code)
               .then((text) => (text ? renderInfo(text) : null))
               .catch(() => null),
         })),
@@ -50,9 +52,10 @@ function renderInfo(text: string): HTMLElement {
 }
 
 function diagnosticsSource(file: () => string) {
-  return async (view: { state: { doc: { length: number } } }): Promise<Diagnostic[]> => {
+  return async (view: EditorView): Promise<Diagnostic[]> => {
+    const code = view.state.doc.toString();
     try {
-      const results = await requestDiagnostics(file());
+      const results = await requestDiagnostics(file(), code);
       const limit = view.state.doc.length;
       return results.map((item) => ({
         from: Math.min(item.start, limit),
@@ -67,9 +70,9 @@ function diagnosticsSource(file: () => string) {
 }
 
 function hover(file: () => string) {
-  return hoverTooltip(async (_view, pos) => {
+  return hoverTooltip(async (view, pos) => {
     try {
-      const info = await requestQuickInfo(file(), pos);
+      const info = await requestQuickInfo(file(), pos, view.state.doc.toString());
       if (!info) return null;
       return {
         pos: info.start,
@@ -95,7 +98,7 @@ export function typescriptSupport(
   completionConfig: Parameters<typeof autocompletion>[0],
 ): Extension {
   return [
-    autocompletion({ ...completionConfig, override: [source(file)] }),
+    autocompletion({ ...completionConfig, override: [completionSource(file)] }),
     linter(diagnosticsSource(file), { delay: 500 }),
     hover(file),
   ];

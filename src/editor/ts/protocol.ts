@@ -32,12 +32,17 @@ export interface TsQuickInfo {
   length: number;
 }
 
+/**
+ * Every query carries the buffer it is about. The editor moves faster than any
+ * debounce, and answering against a stale document produces global completions
+ * where member completions belong.
+ */
 export type TsRequest =
   | { id: number; type: 'sync'; snapshot: TsSnapshot }
-  | { id: number; type: 'completions'; file: string; pos: number }
-  | { id: number; type: 'details'; file: string; pos: number; name: string }
-  | { id: number; type: 'diagnostics'; file: string }
-  | { id: number; type: 'quickinfo'; file: string; pos: number };
+  | { id: number; type: 'completions'; file: string; pos: number; code: string }
+  | { id: number; type: 'details'; file: string; pos: number; name: string; code: string }
+  | { id: number; type: 'diagnostics'; file: string; code: string }
+  | { id: number; type: 'quickinfo'; file: string; pos: number; code: string };
 
 /** `Omit` collapses a union, so the id is stripped from each member instead. */
 export type TsRequestBody = TsRequest extends infer T

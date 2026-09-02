@@ -73,6 +73,20 @@ function sync(next: TsSnapshot): void {
   snapshot = next;
 }
 
+/** Applies the buffer a query was made against before answering it. */
+function touch(name: string, code: string): void {
+  const existing = snapshot.files.find((file) => file.name === name);
+  if (existing?.code === code) return;
+
+  versions.set(name, (versions.get(name) ?? 0) + 1);
+  snapshot = {
+    ...snapshot,
+    files: existing
+      ? snapshot.files.map((file) => (file.name === name ? { ...file, code } : file))
+      : [...snapshot.files, { name, code }],
+  };
+}
+
 const KIND_MAP: Record<string, string> = {
   [ts.ScriptElementKind.memberVariableElement]: 'property',
   [ts.ScriptElementKind.memberFunctionElement]: 'method',
@@ -155,15 +169,19 @@ self.onmessage = (event: MessageEvent<TsRequest>) => {
         sync(request.snapshot);
         break;
       case 'completions':
+        touch(request.file, request.code);
         result = completions(request.file, request.pos);
         break;
       case 'details':
+        touch(request.file, request.code);
         result = details(request.file, request.pos, request.name);
         break;
       case 'diagnostics':
+        touch(request.file, request.code);
         result = diagnostics(request.file);
         break;
       case 'quickinfo':
+        touch(request.file, request.code);
         result = quickInfo(request.file, request.pos);
         break;
     }
