@@ -386,7 +386,9 @@ await step('type errors surface in TypeScript mode', async () => {
   const [chip] = await page.$$('button ::-p-text(JSX / TS)');
   await chip.click();
   await new Promise((r) => setTimeout(r, 600));
-  await typeAtEnd('js', '\nconst typed: number = "not a number";');
+
+  const bad = 'const typed: number = "not a number";';
+  await typeAtEnd('js', `\n${bad}`);
   await page.waitForSelector('.cm-lintRange-error', { timeout: 30000 });
 
   const message = await page.evaluate(async () => {
@@ -399,6 +401,27 @@ await step('type errors surface in TypeScript mode', async () => {
     throw new Error(`unexpected diagnostic: ${message}`);
   }
   await shot('20-type-error');
+
+  // The assignment is deliberately invalid, and the preview reports it as a
+  // compile failure for as long as it stays in the buffer.
+  for (let i = 0; i < bad.length; i++) await page.keyboard.press('Backspace');
+});
+
+await step('typescript syntax runs in a multi-file pen', async () => {
+  // This pen still holds the modules added above, so the entry goes through
+  // the import-map loader rather than the inline `text/babel` script.
+  const mark = problems.length;
+  await typeAtEnd('js', '\nconst answer: number = 42;\nwindow.__ts = answer;');
+  await new Promise((r) => setTimeout(r, 2500));
+
+  const frame = page.frames().find((f) => f !== page.mainFrame());
+  const value = await frame.evaluate(() => window.__ts ?? null);
+  if (value !== 42) throw new Error(`annotated code did not run, __ts was ${value}`);
+
+  const refused = problems
+    .slice(mark)
+    .filter((p) => /Missing initializer|Unexpected token/.test(p));
+  if (refused.length) throw new Error(`babel rejected the annotation: ${refused[0]}`);
 });
 
 await step('command palette opens and filters', async () => {

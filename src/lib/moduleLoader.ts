@@ -46,7 +46,15 @@ export const MODULE_LOADER = String.raw`
     try {
       return Babel.transform(code, {
         filename: filename,
-        presets: [['env', { modules: false }], 'react', 'typescript'],
+        // Modules are named after the tab, so the entry is index.js and a
+        // module is utils.js. The TypeScript preset decides whether to parse
+        // annotations from the extension, and would refuse every one of them
+        // on a .js name, so it has to be told to treat them all as TSX.
+        presets: [
+          ['env', { modules: false }],
+          'react',
+          ['typescript', { allExtensions: true, isTSX: true }],
+        ],
       }).code;
     } catch (error) {
       fail(filename + ': ' + (error && error.message ? error.message : error));
