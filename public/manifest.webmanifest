@@ -1,0 +1,18 @@
+{
+  "name": "Editor — HTML, CSS & JS Playground",
+  "short_name": "Editor",
+  "description": "A fast, private, offline-capable playground for HTML, CSS and JavaScript.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0c0e13",
+  "theme_color": "#0c0e13",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

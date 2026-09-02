@@ -1,0 +1,44 @@
+name: Build and deploy
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run build
+
+      # GitHub Pages for this repo serves the `docs/` folder of the default
+      # branch, so the build output is committed back rather than uploaded.
+      - name: Commit build output
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- docs; then
+            echo "docs/ is already up to date"
+            exit 0
+          fi
+          git add docs
+          git commit -m "Build docs [skip ci]"
+          git push
