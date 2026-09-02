@@ -1,5 +1,7 @@
 import type { Project } from '@/types';
 import { PREVIEW_BRIDGE } from './previewBridge';
+import { annotateHtml } from './annotateHtml';
+import type { CompileResult } from './compile';
 
 const BABEL_CDN = 'https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js';
 
@@ -40,9 +42,16 @@ export interface SrcDocOptions {
   darkPreview?: boolean;
 }
 
-export function buildSrcDoc(project: Project, options: SrcDocOptions = {}): string {
+export function buildSrcDoc(
+  project: Project,
+  compiled: CompileResult,
+  options: SrcDocOptions = {},
+): string {
   const libs = libraryTags(project);
   const useBabel = project.jsFlavor === 'babel';
+
+  // Offsets only mean something when the pane holds the markup verbatim.
+  const body = project.htmlLang === 'html' ? annotateHtml(compiled.html) : compiled.html;
 
   const scriptTag = useBabel
     ? `<script type="text/babel" data-presets="env,react,typescript" data-type="module">\n${escapeClosingTags(project.js)}\n</script>`
@@ -67,11 +76,11 @@ ${RESET}
 ${darkFallback}
 ${libs.css}
 <style id="${USER_CSS_ID}">
-${project.css}
+${compiled.css}
 </style>
 </head>
 <body>
-${project.html}
+${body}
 ${libs.js}
 ${useBabel ? `<script src="${BABEL_CDN}"></script>` : ''}
 ${scriptTag}
@@ -84,9 +93,9 @@ ${scriptTag}
  * differs between two renders the stylesheet can be swapped in place instead,
  * which keeps scroll position, form state and running animations intact.
  */
-export function structuralKey(project: Project): string {
+export function structuralKey(project: Project, compiled: CompileResult): string {
   return JSON.stringify([
-    project.html,
+    compiled.html,
     project.js,
     project.jsFlavor,
     project.libraries.map((l) => `${l.kind}:${l.url}`),
@@ -94,7 +103,7 @@ export function structuralKey(project: Project): string {
 }
 
 /** Standalone document for "download" and "open in new tab" — no host bridge. */
-export function buildStandaloneDoc(project: Project): string {
+export function buildStandaloneDoc(project: Project, compiled: CompileResult): string {
   const libs = libraryTags(project, 4);
   const useBabel = project.jsFlavor === 'babel';
 
@@ -106,11 +115,11 @@ export function buildStandaloneDoc(project: Project): string {
     <title>${escapeAttr(project.title)}</title>
 ${libs.css}
     <style>
-${indent(project.css, 6)}
+${indent(compiled.css, 6)}
     </style>
   </head>
   <body>
-${indent(project.html, 4)}
+${indent(compiled.html, 4)}
 ${libs.js}
 ${useBabel ? `    <script src="${BABEL_CDN}"></script>` : ''}
     <script${useBabel ? ' type="text/babel" data-presets="env,react,typescript"' : ' type="module"'}>

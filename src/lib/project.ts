@@ -15,6 +15,8 @@ export function createProject(partial: Partial<Project> = {}): Project {
     js: '',
     libraries: [],
     jsFlavor: 'javascript',
+    htmlLang: 'html',
+    cssLang: 'css',
     createdAt: now,
     updatedAt: now,
     ...partial,
@@ -29,6 +31,8 @@ export function projectFromTemplate(template: Template): Project {
     js: template.js,
     libraries: template.libraries ?? [],
     jsFlavor: template.jsFlavor ?? 'javascript',
+    htmlLang: template.htmlLang ?? 'html',
+    cssLang: template.cssLang ?? 'css',
   });
 }
 

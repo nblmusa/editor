@@ -44,8 +44,10 @@ interface AppState {
   pendingChanges: boolean;
   savedProjectId: string | null;
   sharedNotice: boolean;
+  reveal: { pane: PaneId; pos: number; nonce: number } | null;
 
   hydrate: () => Promise<void>;
+  revealAt: (pane: PaneId, pos: number) => void;
 
   setCode: (pane: PaneId, value: string) => void;
   setTitle: (title: string) => void;
@@ -60,6 +62,8 @@ interface AppState {
   addLibrary: (library: Library) => void;
   removeLibrary: (id: string) => void;
   setJsFlavor: (flavor: Project['jsFlavor']) => void;
+  setHtmlLang: (lang: Project['htmlLang']) => void;
+  setCssLang: (lang: Project['cssLang']) => void;
 
   newProject: () => Promise<void>;
   loadTemplate: (template: Template) => Promise<void>;
@@ -96,6 +100,7 @@ export const useAppStore = create<AppState>()((set, get) => ({
   pendingChanges: false,
   savedProjectId: null,
   sharedNotice: Boolean(sharedAtBoot),
+  reveal: null,
 
   hydrate: async () => {
     await migrateLegacyData();
@@ -169,6 +174,15 @@ export const useAppStore = create<AppState>()((set, get) => ({
     })),
 
   setJsFlavor: (jsFlavor) => set((state) => ({ project: { ...state.project, jsFlavor } })),
+  setHtmlLang: (htmlLang) => set((state) => ({ project: { ...state.project, htmlLang } })),
+  setCssLang: (cssLang) => set((state) => ({ project: { ...state.project, cssLang } })),
+
+  revealAt: (pane, pos) =>
+    set((state) => ({
+      activePane: pane,
+      view: state.view === 'preview' ? 'both' : state.view,
+      reveal: { pane, pos, nonce: (state.reveal?.nonce ?? 0) + 1 },
+    })),
 
   newProject: () => get().replaceProject(defaultProject()),
   loadTemplate: (template) => get().replaceProject(projectFromTemplate(template)),

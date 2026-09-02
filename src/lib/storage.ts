@@ -81,6 +81,8 @@ export const revisionStore = {
       js: pen.js,
       libraries: pen.libraries,
       jsFlavor: pen.jsFlavor,
+      htmlLang: pen.htmlLang,
+      cssLang: pen.cssLang,
       reason,
       at: Date.now(),
     };

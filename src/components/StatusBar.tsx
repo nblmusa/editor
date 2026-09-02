@@ -1,7 +1,7 @@
 import clsx from 'clsx';
 import { Package, Zap, ZapOff } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import { PANES } from './EditorArea';
+import { PANES, paneLabel } from './EditorArea';
 import { Tooltip } from './ui';
 
 export function StatusBar({ onOpenLibraries }: { onOpenLibraries: () => void }) {
@@ -18,7 +18,7 @@ export function StatusBar({ onOpenLibraries }: { onOpenLibraries: () => void }) 
     <footer className="flex h-7 shrink-0 items-center gap-3 border-t border-line bg-surface px-3 text-[11.5px] text-faint">
       <span className="flex items-center gap-1.5">
         <span className="size-1.5 rounded-full" style={{ background: pane.color }} />
-        {pane.label}
+        {paneLabel(activePane, project)}
       </span>
       <span>
         {lines} {lines === 1 ? 'line' : 'lines'}

@@ -32,19 +32,31 @@ import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/sea
 import { lintGutter, linter, type Diagnostic } from '@codemirror/lint';
 import { html } from '@codemirror/lang-html';
 import { css } from '@codemirror/lang-css';
+import { sass } from '@codemirror/lang-sass';
+import { markdown } from '@codemirror/lang-markdown';
 import { javascript } from '@codemirror/lang-javascript';
 import { abbreviationTracker, expandAbbreviation } from '@emmetio/codemirror6-plugin';
-import type { PaneId, Settings } from '@/types';
+import type { CssLang, HtmlLang, JsFlavor, PaneId, Settings } from '@/types';
 import { editorTheme } from './theme';
 
-export function languageFor(pane: PaneId, jsx: boolean): Extension {
+export interface PaneLanguage {
+  htmlLang: HtmlLang;
+  cssLang: CssLang;
+  jsFlavor: JsFlavor;
+}
+
+export function languageFor(pane: PaneId, langs: PaneLanguage): Extension {
   switch (pane) {
     case 'html':
-      return html({ autoCloseTags: true, matchClosingTags: true, selfClosingTags: false });
+      return langs.htmlLang === 'markdown'
+        ? markdown()
+        : html({ autoCloseTags: true, matchClosingTags: true, selfClosingTags: false });
     case 'css':
-      return css();
-    case 'js':
+      return langs.cssLang === 'scss' ? sass({ indented: false }) : css();
+    case 'js': {
+      const jsx = langs.jsFlavor === 'babel';
       return javascript({ jsx, typescript: jsx });
+    }
   }
 }
 
@@ -85,7 +97,7 @@ export function syntaxErrorLinter() {
 
 export interface EditorConfig extends Settings {
   pane: PaneId;
-  jsx: boolean;
+  langs: PaneLanguage;
   dark: boolean;
   onSave: () => void;
   onRun: () => void;
@@ -106,17 +118,20 @@ export function appearanceExtensions(config: EditorConfig): Extension {
 }
 
 export function behaviourExtensions(config: EditorConfig): Extension {
+  // Abbreviations are meaningless in a Markdown pane and in JavaScript.
+  const emmet =
+    config.emmet &&
+    (config.pane === 'css' || (config.pane === 'html' && config.langs.htmlLang === 'html'));
+
   return [
-    config.emmet && config.pane !== 'js' ? abbreviationTracker() : [],
+    emmet ? abbreviationTracker() : [],
     Prec.highest(
       keymap.of([
         { key: 'Mod-Enter', run: () => (config.onRun(), true) },
         { key: 'Mod-s', run: () => (config.onSave(), true), preventDefault: true },
         { key: 'Shift-Alt-f', run: () => (config.onFormat(), true) },
         { key: 'Mod-/', run: toggleComment },
-        ...(config.emmet && config.pane !== 'js'
-          ? [{ key: 'Tab', run: expandAbbreviation }]
-          : []),
+        ...(emmet ? [{ key: 'Tab', run: expandAbbreviation }] : []),
       ]),
     ),
   ];

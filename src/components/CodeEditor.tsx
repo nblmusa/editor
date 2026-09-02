@@ -9,6 +9,7 @@ import {
   languageFor,
   syntaxErrorLinter,
   type EditorConfig,
+  type PaneLanguage,
 } from '@/editor/extensions';
 
 interface Props {
@@ -17,12 +18,14 @@ interface Props {
   onChange: (value: string) => void;
   settings: Settings;
   dark: boolean;
-  jsx: boolean;
+  langs: PaneLanguage;
   onRun: () => void;
   onSave: () => void;
   onFormat: () => void;
   /** Hidden editors skip measuring, so they need a nudge when revealed. */
   visible?: boolean;
+  /** Scrolls to a character offset; `nonce` lets the same spot be revisited. */
+  reveal?: { pos: number; nonce: number } | null;
 }
 
 export function CodeEditor({
@@ -31,11 +34,12 @@ export function CodeEditor({
   onChange,
   settings,
   dark,
-  jsx,
+  langs,
   onRun,
   onSave,
   onFormat,
   visible = true,
+  reveal = null,
 }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -54,7 +58,7 @@ export function CodeEditor({
   const config = (): EditorConfig => ({
     ...settings,
     pane,
-    jsx,
+    langs,
     dark,
     onRun: () => handlers.current.onRun(),
     onSave: () => handlers.current.onSave(),
@@ -70,7 +74,7 @@ export function CodeEditor({
       extensions: [
         baseExtensions(),
         syntaxErrorLinter(),
-        cm.language.of(languageFor(pane, jsx)),
+        cm.language.of(languageFor(pane, langs)),
         cm.appearance.of(appearanceExtensions(config())),
         cm.behaviour.of(behaviourExtensions(config())),
         cm.keymap.of([]),
@@ -105,9 +109,9 @@ export function CodeEditor({
 
   useEffect(() => {
     view.current?.dispatch({
-      effects: compartments.current.language.reconfigure(languageFor(pane, jsx)),
+      effects: compartments.current.language.reconfigure(languageFor(pane, langs)),
     });
-  }, [pane, jsx]);
+  }, [pane, langs]);
 
   useEffect(() => {
     view.current?.dispatch({
@@ -119,7 +123,7 @@ export function CodeEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     dark,
-    jsx,
+    langs,
     settings.fontSize,
     settings.tabSize,
     settings.wordWrap,
@@ -130,6 +134,19 @@ export function CodeEditor({
   useEffect(() => {
     if (visible) view.current?.requestMeasure();
   }, [visible]);
+
+  useEffect(() => {
+    const instance = view.current;
+    if (!instance || !reveal) return;
+
+    const pos = Math.min(reveal.pos, instance.state.doc.length);
+    const line = instance.state.doc.lineAt(pos);
+    instance.dispatch({
+      selection: { anchor: line.from, head: line.to },
+      effects: EditorView.scrollIntoView(pos, { y: 'center' }),
+    });
+    instance.focus();
+  }, [reveal]);
 
   useEffect(() => {
     let cancelled = false;

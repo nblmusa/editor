@@ -1,4 +1,4 @@
-import type { JsFlavor, Library } from '@/types';
+import type { CssLang, HtmlLang, JsFlavor, Library } from '@/types';
 
 export interface Template {
   id: string;
@@ -10,6 +10,8 @@ export interface Template {
   js: string;
   libraries?: Library[];
   jsFlavor?: JsFlavor;
+  htmlLang?: HtmlLang;
+  cssLang?: CssLang;
 }
 
 const lib = (name: string, url: string, kind: 'js' | 'css' = 'js'): Library => ({
@@ -360,6 +362,97 @@ form.addEventListener('submit', (e) => {
   form.querySelector('.ok').hidden = !valid;
   if (valid) console.log('submitted', Object.fromEntries(new FormData(form)));
 });`,
+  },
+  {
+    id: 'markdown-scss',
+    name: 'Markdown + SCSS',
+    description: 'Write prose as Markdown and style it with nested Sass rules.',
+    tag: 'Preprocessors',
+    htmlLang: 'markdown',
+    cssLang: 'scss',
+    html: `# Release notes
+
+A pen that runs its markup through **Markdown** and its styles through **Sass**.
+
+## What changed
+
+- Preview keeps its state while you tweak styling
+- Console shows real objects, not flattened text
+- Everything works offline
+
+> Switch the language back with the chip above each pane.
+
+\`\`\`js
+const editor = { fast: true, private: true };
+\`\`\`
+
+[Read more](https://developer.mozilla.org)`,
+    css: `$accent: #2dd4bf;
+$ink: #e6e9ef;
+$muted: #9aa4b6;
+
+@mixin card {
+  padding: 32px clamp(20px, 5vw, 48px);
+  border-radius: 14px;
+  background: #151923;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+html {
+  background: #0f1219;
+}
+
+body {
+  max-width: 680px;
+  margin: 40px auto;
+  color: $ink;
+  font: 16px/1.7 system-ui, sans-serif;
+  @include card;
+}
+
+h1 {
+  margin-top: 0;
+  font-size: 28px;
+
+  + p {
+    color: $muted;
+  }
+}
+
+h2 {
+  margin-top: 28px;
+  font-size: 18px;
+  color: $accent;
+}
+
+blockquote {
+  margin: 24px 0;
+  padding-left: 16px;
+  border-left: 3px solid $accent;
+  color: $muted;
+}
+
+code {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.07);
+  font-size: 0.9em;
+}
+
+pre code {
+  display: block;
+  padding: 14px 16px;
+  overflow-x: auto;
+}
+
+a {
+  color: $accent;
+
+  &:hover {
+    text-decoration-thickness: 2px;
+  }
+}`,
+    js: `console.log('Markdown and SCSS are compiled in the browser.');`,
   },
 ];
 

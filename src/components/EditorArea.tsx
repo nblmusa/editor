@@ -1,7 +1,7 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import clsx from 'clsx';
 import { Braces, FileCode2, Palette, Sparkles, WandSparkles } from 'lucide-react';
-import type { PaneId } from '@/types';
+import type { PaneId, Project } from '@/types';
 import { useAppStore } from '@/store/useAppStore';
 import { formatCode } from '@/lib/format';
 import { CodeEditor } from './CodeEditor';
@@ -13,6 +13,13 @@ export const PANES: { id: PaneId; label: string; icon: typeof FileCode2; color: 
   { id: 'js', label: 'JS', icon: Braces, color: '#ffcb6b' },
 ];
 
+/** Tab labels follow the preprocessor a pane is set to. */
+export function paneLabel(pane: PaneId, project: Pick<Project, 'htmlLang' | 'cssLang'>): string {
+  if (pane === 'html') return project.htmlLang === 'markdown' ? 'MD' : 'HTML';
+  if (pane === 'css') return project.cssLang === 'scss' ? 'SCSS' : 'CSS';
+  return 'JS';
+}
+
 export function useFormatPane() {
   const project = useAppStore((s) => s.project);
   const tabSize = useAppStore((s) => s.settings.tabSize);
@@ -20,8 +27,9 @@ export function useFormatPane() {
 
   return useCallback(
     async (pane: PaneId) => {
+      const langs = { htmlLang: project.htmlLang, cssLang: project.cssLang };
       try {
-        const formatted = await formatCode(project[pane], pane, tabSize);
+        const formatted = await formatCode(project[pane], pane, tabSize, langs);
         if (formatted !== project[pane]) {
           setCode(pane, formatted);
           toast(`Formatted ${pane.toUpperCase()}`);
@@ -47,10 +55,24 @@ export function EditorArea({ dark, onRun, onSave }: Props) {
   const setActivePane = useAppStore((s) => s.setActivePane);
   const setCode = useAppStore((s) => s.setCode);
   const setJsFlavor = useAppStore((s) => s.setJsFlavor);
+  const setHtmlLang = useAppStore((s) => s.setHtmlLang);
+  const setCssLang = useAppStore((s) => s.setCssLang);
+  const reveal = useAppStore((s) => s.reveal);
   const format = useFormatPane();
 
   const jsx = project.jsFlavor === 'babel';
   const columns = settings.editorLayout === 'columns';
+
+  const langs = useMemo(
+    () => ({
+      htmlLang: project.htmlLang,
+      cssLang: project.cssLang,
+      jsFlavor: project.jsFlavor,
+    }),
+    [project.htmlLang, project.cssLang, project.jsFlavor],
+  );
+
+  const labelFor = (pane: PaneId) => paneLabel(pane, project);
 
   const editor = (pane: PaneId, visible = true) => (
     <CodeEditor
@@ -59,13 +81,49 @@ export function EditorArea({ dark, onRun, onSave }: Props) {
       onChange={(value) => setCode(pane, value)}
       settings={settings}
       dark={dark}
-      jsx={jsx && pane === 'js'}
+      langs={langs}
       onRun={onRun}
       onSave={onSave}
       onFormat={() => format(pane)}
       visible={visible}
+      reveal={reveal?.pane === pane ? reveal : null}
     />
   );
+
+  const languageChip = () => {
+    if (activePane === 'html') {
+      return (
+        <Chip
+          active={project.htmlLang === 'markdown'}
+          tip="Write the markup as Markdown"
+          onClick={() => setHtmlLang(project.htmlLang === 'markdown' ? 'html' : 'markdown')}
+        >
+          Markdown
+        </Chip>
+      );
+    }
+    if (activePane === 'css') {
+      return (
+        <Chip
+          active={project.cssLang === 'scss'}
+          tip="Compile the stylesheet with Sass"
+          onClick={() => setCssLang(project.cssLang === 'scss' ? 'css' : 'scss')}
+        >
+          SCSS
+        </Chip>
+      );
+    }
+    return (
+      <Chip
+        active={jsx}
+        tip="Compile JSX and TypeScript with Babel"
+        onClick={() => setJsFlavor(jsx ? 'javascript' : 'babel')}
+      >
+        <Sparkles size={12} />
+        JSX / TS
+      </Chip>
+    );
+  };
 
   if (columns) {
     return (
@@ -78,7 +136,7 @@ export function EditorArea({ dark, onRun, onSave }: Props) {
             <header className="flex h-8 shrink-0 items-center gap-2 border-b border-line px-2.5">
               <span className="size-1.5 rounded-full" style={{ background: pane.color }} />
               <span className="text-[11.5px] font-medium tracking-wide text-muted uppercase">
-                {pane.label}
+                {labelFor(pane.id)}
               </span>
               <IconButton
                 label={`Format ${pane.label}`}
@@ -114,7 +172,7 @@ export function EditorArea({ dark, onRun, onSave }: Props) {
                 className={clsx('size-1.5 rounded-full transition-opacity', !filled && 'opacity-25')}
                 style={{ background: pane.color }}
               />
-              {pane.label}
+              {labelFor(pane.id)}
               {active && (
                 <span
                   className="absolute inset-x-1.5 -bottom-px h-0.5 rounded-full"
@@ -126,20 +184,7 @@ export function EditorArea({ dark, onRun, onSave }: Props) {
         })}
 
         <div className="ml-auto flex items-center gap-0.5">
-          {activePane === 'js' && (
-            <Tooltip content="Compile JSX and TypeScript with Babel">
-              <button
-                onClick={() => setJsFlavor(jsx ? 'javascript' : 'babel')}
-                className={clsx(
-                  'inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-[11.5px] font-medium transition-colors',
-                  jsx ? 'bg-accent/15 text-accent' : 'text-faint hover:text-ink',
-                )}
-              >
-                <Sparkles size={12} />
-                JSX / TS
-              </button>
-            </Tooltip>
-          )}
+          {languageChip()}
           <IconButton label="Format this pane (Shift+Alt+F)" onClick={() => format(activePane)}>
             <WandSparkles size={14} />
           </IconButton>
@@ -155,5 +200,31 @@ export function EditorArea({ dark, onRun, onSave }: Props) {
         ))}
       </div>
     </div>
+  );
+}
+
+function Chip({
+  active,
+  tip,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  tip: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip content={tip}>
+      <button
+        onClick={onClick}
+        className={clsx(
+          'inline-flex h-6 items-center gap-1.5 rounded-md px-2 text-[11.5px] font-medium transition-colors',
+          active ? 'bg-accent/15 text-accent' : 'text-faint hover:text-ink',
+        )}
+      >
+        {children}
+      </button>
+    </Tooltip>
   );
 }

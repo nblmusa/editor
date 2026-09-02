@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { Monitor, RotateCw, Smartphone, SquareArrowOutUpRight, Tablet } from 'lucide-react';
+import {
+  Monitor,
+  MousePointerClick,
+  RotateCw,
+  Smartphone,
+  SquareArrowOutUpRight,
+  Tablet,
+} from 'lucide-react';
 import type { Project } from '@/types';
+import type { CompileResult } from '@/lib/compile';
 import { buildSrcDoc, buildStandaloneDoc, structuralKey } from '@/lib/srcdoc';
-import { patchPreviewCss, setPreviewWindow } from '@/lib/frameBridge';
+import { patchPreviewCss, setPreviewInspector, setPreviewWindow } from '@/lib/frameBridge';
 import { useOutputStore } from '@/store/useOutputStore';
 import { IconButton, SegmentedControl } from './ui';
 
@@ -20,17 +28,29 @@ const DEVICES: Record<DeviceId, number | null> = {
 
 interface Props {
   project: Project;
+  compiled: CompileResult;
   runToken: number;
   autoRun: boolean;
   autoRunDelay: number;
   dark: boolean;
   onHotkey: (key: string, modifiers: { shift: boolean; alt: boolean }) => void;
+  onInspect: (pos: number | null) => void;
 }
 
-export function Preview({ project, runToken, autoRun, autoRunDelay, dark, onHotkey }: Props) {
+export function Preview({
+  project,
+  compiled,
+  runToken,
+  autoRun,
+  autoRunDelay,
+  dark,
+  onHotkey,
+  onInspect,
+}: Props) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [device, setDevice] = useState<DeviceId>('auto');
   const [status, setStatus] = useState<'idle' | 'running'>('idle');
+  const [inspecting, setInspecting] = useState(false);
 
   const push = useOutputStore((s) => s.push);
   const recordRequest = useOutputStore((s) => s.recordRequest);
@@ -38,12 +58,15 @@ export function Preview({ project, runToken, autoRun, autoRunDelay, dark, onHotk
   const clearOutput = useOutputStore((s) => s.clear);
 
   const doc = useMemo(
-    () => buildSrcDoc(project, { darkPreview: dark }),
+    () => buildSrcDoc(project, compiled, { darkPreview: dark }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [project.html, project.css, project.js, project.libraries, project.jsFlavor, dark],
+    [compiled, project.js, project.libraries, project.jsFlavor, project.htmlLang, dark],
   );
 
-  const shape = useMemo(() => structuralKey(project) + String(dark), [project, dark]);
+  const shape = useMemo(
+    () => structuralKey(project, compiled) + String(dark),
+    [project, compiled, dark],
+  );
   const lastShape = useRef<string | null>(null);
 
   const reload = useCallback(
@@ -53,6 +76,7 @@ export function Preview({ project, runToken, autoRun, autoRunDelay, dark, onHotk
       setPreviewWindow(null);
       clearOutput();
       setStatus('running');
+      setInspecting(false);
       lastShape.current = shape;
       el.srcdoc = html;
     },
@@ -76,12 +100,12 @@ export function Preview({ project, runToken, autoRun, autoRunDelay, dark, onHotk
     const timer = window.setTimeout(() => {
       // Styling on its own can be swapped in place, which preserves scroll
       // position, form state and any animation already in flight.
-      if (lastShape.current === shape && patchPreviewCss(project.css)) return;
+      if (lastShape.current === shape && patchPreviewCss(compiled.css)) return;
       reload(doc);
     }, autoRunDelay);
 
     return () => clearTimeout(timer);
-  }, [doc, shape, project.css, autoRun, autoRunDelay, reload]);
+  }, [doc, shape, compiled.css, autoRun, autoRunDelay, reload]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -113,6 +137,10 @@ export function Preview({ project, runToken, autoRun, autoRunDelay, dark, onHotk
         case 'eval-result':
           push({ level: data.ok ? 'result' : 'error', parts: data.parts });
           break;
+        case 'inspect':
+          setInspecting(false);
+          if (!data.cancelled) onInspect(typeof data.pos === 'number' ? data.pos : null);
+          break;
         case 'hotkey':
           onHotkey(data.key, { shift: Boolean(data.shift), alt: Boolean(data.alt) });
           break;
@@ -121,10 +149,15 @@ export function Preview({ project, runToken, autoRun, autoRunDelay, dark, onHotk
 
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [push, clearOutput, recordRequest, setAudit, onHotkey]);
+  }, [push, clearOutput, recordRequest, setAudit, onHotkey, onInspect]);
+
+  const toggleInspector = () => {
+    const next = !inspecting;
+    if (setPreviewInspector(next)) setInspecting(next);
+  };
 
   const openInNewTab = () => {
-    const blob = new Blob([buildStandaloneDoc(project)], { type: 'text/html' });
+    const blob = new Blob([buildStandaloneDoc(project, compiled)], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank', 'noopener');
     setTimeout(() => URL.revokeObjectURL(url), 30_000);
@@ -157,6 +190,15 @@ export function Preview({ project, runToken, autoRun, autoRunDelay, dark, onHotk
           />
         </div>
 
+        {project.htmlLang === 'html' && (
+          <IconButton
+            label={inspecting ? 'Cancel inspect' : 'Inspect an element'}
+            onClick={toggleInspector}
+            className={clsx(inspecting && 'bg-accent/15 text-accent')}
+          >
+            <MousePointerClick size={15} />
+          </IconButton>
+        )}
         <IconButton label="Reload preview" onClick={() => reload(doc)}>
           <RotateCw size={15} />
         </IconButton>

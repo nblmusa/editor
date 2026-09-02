@@ -10,6 +10,8 @@ export interface Library {
 }
 
 export type JsFlavor = 'javascript' | 'babel';
+export type HtmlLang = 'html' | 'markdown';
+export type CssLang = 'css' | 'scss';
 
 export interface Project {
   id: string;
@@ -19,6 +21,8 @@ export interface Project {
   js: string;
   libraries: Library[];
   jsFlavor: JsFlavor;
+  htmlLang: HtmlLang;
+  cssLang: CssLang;
   createdAt: number;
   updatedAt: number;
 }
@@ -34,6 +38,8 @@ export interface Revision {
   js: string;
   libraries: Library[];
   jsFlavor: JsFlavor;
+  htmlLang: HtmlLang;
+  cssLang: CssLang;
   reason: RevisionReason;
   at: number;
 }

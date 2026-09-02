@@ -22,3 +22,7 @@ export function patchPreviewCss(css: string): boolean {
 export function auditPreview(): boolean {
   return post({ type: 'audit' });
 }
+
+export function setPreviewInspector(on: boolean): boolean {
+  return post({ type: 'inspect', on });
+}

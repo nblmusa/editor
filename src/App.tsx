@@ -29,6 +29,7 @@ import { useOutputStore } from '@/store/useOutputStore';
 import { useResolvedTheme } from '@/hooks/useTheme';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { buildShareUrl, consumeSharedProject } from '@/lib/share';
+import { useCompiledProject } from '@/hooks/useCompiledProject';
 import { downloadHtml, downloadZip } from '@/lib/exporter';
 import { Header } from '@/components/Header';
 import { EditorArea, PANES, useFormatPane } from '@/components/EditorArea';
@@ -107,6 +108,26 @@ export default function App() {
     await saveProject();
     toast('Pen saved');
   }, [saveProject]);
+
+  const compiled = useCompiledProject(project);
+  const revealAt = useAppStore((s) => s.revealAt);
+
+  const onInspect = useCallback(
+    (pos: number | null) => {
+      if (pos == null) {
+        toast('That element has no matching source — it was created by script.');
+        return;
+      }
+      revealAt('html', pos);
+    },
+    [revealAt],
+  );
+
+  const pushText = useOutputStore((s) => s.pushText);
+  useEffect(() => {
+    if (!compiled.error) return;
+    pushText('error', `${compiled.error.pane.toUpperCase()}: ${compiled.error.message}`);
+  }, [compiled.error, pushText]);
 
   const share = useCallback(async () => {
     const url = buildShareUrl(useAppStore.getState().project);
@@ -319,11 +340,13 @@ export default function App() {
             second={
               <Preview
                 project={project}
+                compiled={compiled}
                 runToken={runToken}
                 autoRun={settings.autoRun}
                 autoRunDelay={settings.autoRunDelay}
                 dark={theme === 'dark'}
                 onHotkey={onFrameHotkey}
+                onInspect={onInspect}
               />
             }
           />

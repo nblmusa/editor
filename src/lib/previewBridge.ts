@@ -356,12 +356,102 @@ export const PREVIEW_BRIDGE = String.raw`
       });
   }
 
+  /* ------------------------------- inspector ------------------------------- */
+
+  var inspector = { on: false, box: null, label: null, target: null };
+
+  function overlay() {
+    if (inspector.box) return inspector.box;
+    var box = document.createElement('div');
+    box.style.cssText = [
+      'position:fixed', 'z-index:2147483647', 'pointer-events:none',
+      'background:rgba(45,212,191,.18)', 'border:1px solid rgba(45,212,191,.9)',
+      'border-radius:2px', 'transition:all .06s ease-out'
+    ].join(';');
+
+    var label = document.createElement('div');
+    label.style.cssText = [
+      'position:absolute', 'left:0', 'top:-19px', 'padding:1px 5px',
+      'font:500 11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace',
+      'color:#04201c', 'background:#2dd4bf', 'border-radius:3px', 'white-space:nowrap'
+    ].join(';');
+
+    box.appendChild(label);
+    document.body.appendChild(box);
+    inspector.box = box;
+    inspector.label = label;
+    return box;
+  }
+
+  function highlight(el) {
+    var rect = el.getBoundingClientRect();
+    var box = overlay();
+    box.style.display = 'block';
+    box.style.left = rect.left + 'px';
+    box.style.top = rect.top + 'px';
+    box.style.width = rect.width + 'px';
+    box.style.height = rect.height + 'px';
+    inspector.label.textContent =
+      describeNode(el).slice(1, -1) + '  ' + Math.round(rect.width) + '×' + Math.round(rect.height);
+  }
+
+  function sourceHolder(el) {
+    while (el && el !== document.documentElement) {
+      if (el.hasAttribute && el.hasAttribute('data-ed-pos')) return el;
+      el = el.parentElement;
+    }
+    return null;
+  }
+
+  function onInspectMove(e) {
+    var el = e.target;
+    if (!el || el === inspector.target || el === document.documentElement) return;
+    inspector.target = el;
+    highlight(el);
+  }
+
+  function onInspectClick(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    var holder = sourceHolder(e.target);
+    send('inspect', {
+      pos: holder ? Number(holder.getAttribute('data-ed-pos')) : null,
+      label: describeNode(e.target)
+    });
+    setInspector(false);
+  }
+
+  function onInspectKey(e) {
+    if (e.key === 'Escape') {
+      setInspector(false);
+      send('inspect', { pos: null, cancelled: true });
+    }
+  }
+
+  function setInspector(on) {
+    if (inspector.on === on) return;
+    inspector.on = on;
+    inspector.target = null;
+
+    if (on) {
+      document.addEventListener('mousemove', onInspectMove, true);
+      document.addEventListener('click', onInspectClick, true);
+      document.addEventListener('keydown', onInspectKey, true);
+    } else {
+      document.removeEventListener('mousemove', onInspectMove, true);
+      document.removeEventListener('click', onInspectClick, true);
+      document.removeEventListener('keydown', onInspectKey, true);
+      if (inspector.box) inspector.box.style.display = 'none';
+    }
+  }
+
   window.addEventListener('message', function (e) {
     var data = e.data;
     if (!data || data.__editorHost !== true) return;
     if (data.type === 'eval') runEval(data.code);
     else if (data.type === 'patch-css') patchCss(data.css);
     else if (data.type === 'audit') runAudit();
+    else if (data.type === 'inspect') setInspector(Boolean(data.on));
   });
 
   /* ------------------------------- lifecycle ------------------------------- */

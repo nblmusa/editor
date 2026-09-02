@@ -1,5 +1,6 @@
 import type { Project } from '@/types';
 import { buildStandaloneDoc } from './srcdoc';
+import { compileProject } from './compile';
 import { slugify } from './project';
 
 function download(blob: Blob, filename: string): void {
@@ -13,13 +14,15 @@ function download(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function downloadHtml(project: Project): void {
-  const doc = buildStandaloneDoc(project);
+/** Exports carry compiled output, so a Sass or Markdown pen still runs anywhere. */
+export async function downloadHtml(project: Project): Promise<void> {
+  const doc = buildStandaloneDoc(project, await compileProject(project));
   download(new Blob([doc], { type: 'text/html' }), `${slugify(project.title)}.html`);
 }
 
 export async function downloadZip(project: Project): Promise<void> {
   const { default: JSZip } = await import('jszip');
+  const compiled = await compileProject(project);
   const zip = new JSZip();
   const name = slugify(project.title);
 
@@ -44,15 +47,18 @@ ${cssLinks}
     <link rel="stylesheet" href="style.css">
   </head>
   <body>
-${project.html}
+${compiled.html}
 ${jsLinks}
     <script type="module" src="script.js"></script>
   </body>
 </html>
 `,
   );
-  zip.file('style.css', project.css);
+  zip.file('style.css', compiled.css);
   zip.file('script.js', project.js);
+
+  if (project.cssLang !== 'css') zip.file(`source.${project.cssLang}`, project.css);
+  if (project.htmlLang !== 'html') zip.file(`source.md`, project.html);
   zip.file(
     'README.md',
     `# ${project.title}\n\nExported from Editor.\n\nOpen \`index.html\` in a browser, or serve the folder with any static file server.\n`,

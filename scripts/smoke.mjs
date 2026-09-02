@@ -245,6 +245,58 @@ await step('editing HTML still rebuilds the preview', async () => {
   if (counter !== '0') throw new Error('preview should have been rebuilt from scratch');
 });
 
+await step('inspecting an element jumps to its source', async () => {
+  const [inspect] = await page.$$('[aria-label="Inspect an element"]');
+  if (!inspect) throw new Error('no inspect control in the preview toolbar');
+  await inspect.click();
+  await new Promise((r) => setTimeout(r, 400));
+
+  const frame = page.frames().find((f) => f !== page.mainFrame());
+  const box = await frame.$eval('#cta', (n) => {
+    const r = n.getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  });
+
+  const frameBox = await (await page.$('iframe')).boundingBox();
+  await page.mouse.move(frameBox.x + box.x, frameBox.y + box.y);
+  await new Promise((r) => setTimeout(r, 250));
+  await shot('16-inspect');
+  await page.mouse.click(frameBox.x + box.x, frameBox.y + box.y);
+  await new Promise((r) => setTimeout(r, 600));
+
+  const pane = await page.evaluate(() => {
+    const panes = [...document.querySelectorAll('[data-pane]')];
+    return panes.find((el) => el.offsetParent !== null)?.getAttribute('data-pane');
+  });
+  if (pane !== 'html') throw new Error(`expected the HTML pane to be showing, saw ${pane}`);
+
+  const selection = await page.evaluate(() => window.getSelection()?.toString() ?? '');
+  if (!selection.includes('cta')) {
+    throw new Error(`selection should cover the clicked element, got "${selection}"`);
+  }
+});
+
+await step('markdown and scss compile in the preview', async () => {
+  await palette('browse templates');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('[aria-label="Templates"]', { timeout: 4000 });
+  const [card] = await page.$$('button ::-p-text(Markdown + SCSS)');
+  if (!card) throw new Error('the Markdown + SCSS template is missing');
+  await card.click();
+  await new Promise((r) => setTimeout(r, 2500));
+
+  const frame = page.frames().find((f) => f !== page.mainFrame());
+  const heading = await frame.$eval('h1', (n) => n.textContent);
+  if (heading !== 'Release notes') throw new Error(`markdown did not render, saw "${heading}"`);
+
+  const accent = await frame.$eval('h2', (n) => getComputedStyle(n).color);
+  if (!accent.includes('45, 212, 191')) throw new Error(`scss variable did not apply: ${accent}`);
+
+  const link = await frame.$eval('a', (n) => n.getAttribute('href'));
+  if (!link?.includes('mozilla')) throw new Error('markdown links did not survive compilation');
+  await shot('17-preprocessors');
+});
+
 await step('command palette opens and filters', async () => {
   await palette('templ');
   await shot('03-palette');
