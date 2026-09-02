@@ -72,6 +72,7 @@ export interface Settings {
   autoRunDelay: number;
   autoCloseTags: boolean;
   emmet: boolean;
+  intellisense: boolean;
   keymap: Keymap;
   editorLayout: EditorLayout;
   splitDirection: SplitDirection;

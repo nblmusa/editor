@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import { Package, Zap, ZapOff } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
+import { getStatus, watchStatus } from '@/editor/ts/client';
 import { codeOf, PANES, paneLabel } from './EditorArea';
 import { Tooltip } from './ui';
 
@@ -29,6 +31,8 @@ export function StatusBar({ onOpenLibraries }: { onOpenLibraries: () => void }) 
         <span className="rounded bg-accent/12 px-1.5 py-px text-accent">JSX / TS</span>
       )}
 
+      <TypeServiceBadge />
+
       <button
         onClick={onOpenLibraries}
         className="ml-auto flex items-center gap-1.5 transition-colors hover:text-ink"
@@ -37,7 +41,9 @@ export function StatusBar({ onOpenLibraries }: { onOpenLibraries: () => void }) 
         {project.libraries.length} {project.libraries.length === 1 ? 'library' : 'libraries'}
       </button>
 
-      <Tooltip content={settings.autoRun ? 'Preview updates as you type' : 'Preview only updates on Run'}>
+      <Tooltip
+        content={settings.autoRun ? 'Preview updates as you type' : 'Preview only updates on Run'}
+      >
         <button
           onClick={() => updateSettings({ autoRun: !settings.autoRun })}
           className={clsx(
@@ -50,5 +56,32 @@ export function StatusBar({ onOpenLibraries }: { onOpenLibraries: () => void }) 
         </button>
       </Tooltip>
     </footer>
+  );
+}
+
+function TypeServiceBadge() {
+  const [status, setStatus] = useState(getStatus);
+  useEffect(() => watchStatus(setStatus), []);
+
+  if (status === 'off') return null;
+
+  return (
+    <Tooltip
+      content={
+        status === 'loading'
+          ? 'Loading the TypeScript language service…'
+          : 'Completions and type information are live'
+      }
+    >
+      <span
+        className={clsx(
+          'hidden items-center gap-1.5 sm:flex',
+          status === 'ready' ? 'text-ok' : 'text-warn',
+        )}
+      >
+        <span className="size-1.5 rounded-full bg-current" />
+        TS
+      </span>
+    </Tooltip>
   );
 }

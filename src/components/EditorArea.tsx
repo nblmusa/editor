@@ -4,6 +4,7 @@ import { Braces, FileCode2, Palette, Plus, Sparkles, WandSparkles, X } from 'luc
 import type { PaneId, PaneKey, PenModule, Project } from '@/types';
 import { useAppStore } from '@/store/useAppStore';
 import { formatCode } from '@/lib/format';
+import { tsFileName, useTypeScriptSync } from '@/editor/ts/useTypeScriptSync';
 import { CodeEditor } from './CodeEditor';
 import { IconButton, Tooltip, toast } from './ui';
 
@@ -75,6 +76,8 @@ export function EditorArea({ dark, onRun, onSave }: Props) {
   const reveal = useAppStore((s) => s.reveal);
   const format = useFormatPane();
 
+  useTypeScriptSync(project, settings.intellisense);
+
   const jsx = project.jsFlavor === 'babel';
   const columns = settings.editorLayout === 'columns';
 
@@ -104,6 +107,7 @@ export function EditorArea({ dark, onRun, onSave }: Props) {
       onFormat={() => format(pane)}
       visible={visible}
       reveal={reveal?.pane === pane ? reveal : null}
+      tsFile={settings.intellisense ? tsFileName(project, pane) : null}
     />
   );
 

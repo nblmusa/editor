@@ -36,6 +36,7 @@ import { sass } from '@codemirror/lang-sass';
 import { markdown } from '@codemirror/lang-markdown';
 import { javascript } from '@codemirror/lang-javascript';
 import { abbreviationTracker, expandAbbreviation } from '@emmetio/codemirror6-plugin';
+import { typescriptSupport } from './ts/extension';
 import type { CssLang, HtmlLang, JsFlavor, PaneId, Settings } from '@/types';
 import { editorTheme } from './theme';
 
@@ -137,6 +138,19 @@ export function behaviourExtensions(config: EditorConfig): Extension {
   ];
 }
 
+const COMPLETION_CONFIG = { activateOnTyping: true, icons: true, maxRenderedOptions: 40 };
+
+/**
+ * Completion and diagnostics for a pane. The TypeScript worker replaces both
+ * when it is available for a script pane; everything else falls back to
+ * CodeMirror's own completion and the Lezer parse-error check.
+ */
+export function serviceExtensions(tsFile: (() => string) | null): Extension {
+  return tsFile
+    ? typescriptSupport(tsFile, COMPLETION_CONFIG)
+    : [autocompletion(COMPLETION_CONFIG), syntaxErrorLinter()];
+}
+
 export function baseExtensions(): Extension {
   return [
     history(),
@@ -146,7 +160,6 @@ export function baseExtensions(): Extension {
     indentOnInput(),
     bracketMatching(),
     closeBrackets(),
-    autocompletion({ activateOnTyping: true, icons: true, maxRenderedOptions: 40 }),
     rectangularSelection(),
     crosshairCursor(),
     highlightActiveLine(),

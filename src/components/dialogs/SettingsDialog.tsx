@@ -91,6 +91,17 @@ export function SettingsDialog({ open, onClose }: { open: boolean; onClose: () =
           <Switch label="Emmet" checked={settings.emmet} onChange={(emmet) => update({ emmet })} />
         </Field>
 
+        <Field
+          label="IntelliSense"
+          hint="Completions, hover types and TypeScript errors in the script panes. Loads a few megabytes the first time you type."
+        >
+          <Switch
+            label="TypeScript language service"
+            checked={settings.intellisense}
+            onChange={(intellisense) => update({ intellisense })}
+          />
+        </Field>
+
         <Field label="Key bindings">
           <Select
             value={settings.keymap}

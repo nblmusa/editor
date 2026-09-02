@@ -27,6 +27,7 @@ export const defaultSettings: Settings = {
   autoRunDelay: 500,
   autoCloseTags: true,
   emmet: true,
+  intellisense: true,
   keymap: 'default',
   editorLayout: 'tabs',
   splitDirection: 'horizontal',

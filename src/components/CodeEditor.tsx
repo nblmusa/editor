@@ -7,7 +7,7 @@ import {
   baseExtensions,
   behaviourExtensions,
   languageFor,
-  syntaxErrorLinter,
+  serviceExtensions,
   type EditorConfig,
   type PaneLanguage,
 } from '@/editor/extensions';
@@ -28,6 +28,8 @@ interface Props {
   visible?: boolean;
   /** Scrolls to a character offset; `nonce` lets the same spot be revisited. */
   reveal?: { pos: number; nonce: number } | null;
+  /** Virtual filename for the TypeScript service; omitted to leave it off. */
+  tsFile?: string | null;
 }
 
 export function CodeEditor({
@@ -43,6 +45,7 @@ export function CodeEditor({
   onFormat,
   visible = true,
   reveal = null,
+  tsFile = null,
 }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -51,7 +54,12 @@ export function CodeEditor({
     appearance: new Compartment(),
     behaviour: new Compartment(),
     keymap: new Compartment(),
+    services: new Compartment(),
   });
+
+  // Read through a ref so renaming a module does not rebuild the extension.
+  const currentFile = useRef(tsFile);
+  currentFile.current = tsFile;
 
   // Callbacks change every render; read them through a ref so the editor is
   // never torn down just because the parent re-rendered.
@@ -76,7 +84,7 @@ export function CodeEditor({
       doc: value,
       extensions: [
         baseExtensions(),
-        syntaxErrorLinter(),
+        cm.services.of(serviceExtensions(tsFile ? () => currentFile.current! : null)),
         cm.language.of(languageFor(pane, langs)),
         cm.appearance.of(appearanceExtensions(config())),
         cm.behaviour.of(behaviourExtensions(config())),
@@ -115,6 +123,15 @@ export function CodeEditor({
       effects: compartments.current.language.reconfigure(languageFor(pane, langs)),
     });
   }, [pane, langs]);
+
+  const tsEnabled = Boolean(tsFile);
+  useEffect(() => {
+    view.current?.dispatch({
+      effects: compartments.current.services.reconfigure(
+        serviceExtensions(tsEnabled ? () => currentFile.current! : null),
+      ),
+    });
+  }, [tsEnabled]);
 
   useEffect(() => {
     view.current?.dispatch({
