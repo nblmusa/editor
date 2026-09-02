@@ -131,6 +131,114 @@ await step('console evaluates expressions in the preview', async () => {
   if (!/querySelectorAll/.test(text)) throw new Error('input was not echoed');
 });
 
+const typeAtEnd = async (pane, text) => {
+  await page.click(`[data-pane="${pane}"] .cm-content`);
+  await page.keyboard.down('Meta');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.up('Meta');
+  await page.keyboard.type(text);
+};
+
+const evalInConsole = async (code) => {
+  await page.click('input[placeholder="Run an expression in the preview…"]');
+  await page.keyboard.type(code);
+  await page.keyboard.press('Enter');
+  await new Promise((r) => setTimeout(r, 700));
+};
+
+await step('console.table renders a real table', async () => {
+  await evalInConsole('console.table([{ name: "a", n: 1 }, { name: "b", n: 2 }])');
+  const headers = await page.$$eval('section table th', (nodes) => nodes.map((n) => n.textContent));
+  if (!headers.includes('name') || !headers.includes('n')) {
+    throw new Error(`table headers were ${JSON.stringify(headers)}`);
+  }
+});
+
+await step('objects arrive structured and expand', async () => {
+  await evalInConsole('({ outer: { inner: { deep: 42 } } })');
+  const text = await page.$$eval('section', (nodes) => nodes.map((n) => n.textContent).join(' '));
+  if (!text.includes('deep: 42')) throw new Error('object was not serialised structurally');
+
+  const buttons = await page.$$('section button');
+  let expanded = false;
+  for (const button of buttons.reverse()) {
+    const label = await button.evaluate((n) => n.textContent ?? '');
+    if (label.includes('outer')) {
+      await button.click();
+      expanded = true;
+      break;
+    }
+  }
+  if (!expanded) throw new Error('no disclosure control rendered for the object');
+  await new Promise((r) => setTimeout(r, 300));
+});
+
+await step('network tab records requests', async () => {
+  await evalInConsole('fetch("https://cdn.jsdelivr.net/npm/lz-string@1.5.0/package.json")');
+  await new Promise((r) => setTimeout(r, 1500));
+  const [networkTab] = await page.$$('button ::-p-text(Network)');
+  await networkTab.click();
+  await new Promise((r) => setTimeout(r, 400));
+  const rows = await page.$$eval('section table tbody tr', (nodes) =>
+    nodes.map((n) => n.textContent),
+  );
+  if (!rows.some((row) => row?.includes('package.json'))) {
+    throw new Error(`no matching request row: ${JSON.stringify(rows)}`);
+  }
+  await shot('12-network');
+  const [consoleTab] = await page.$$('button ::-p-text(Console)');
+  await consoleTab.click();
+});
+
+await step('accessibility audit reports violations', async () => {
+  const [auditTab] = await page.$$('button ::-p-text(Accessibility)');
+  await auditTab.click();
+  await new Promise((r) => setTimeout(r, 300));
+  const [runButton] = await page.$$('button ::-p-text(Run audit)');
+  await runButton.click();
+  await page.waitForFunction(
+    () => !document.body.textContent?.includes('Running…'),
+    { timeout: 20000 },
+  );
+  await new Promise((r) => setTimeout(r, 500));
+  const text = await page.evaluate(() => document.body.textContent ?? '');
+  if (!/violated|No violations found/.test(text)) throw new Error('audit produced no result');
+  await shot('13-audit');
+  const [consoleTab] = await page.$$('button ::-p-text(Console)');
+  await consoleTab.click();
+});
+
+await step('editing CSS keeps the preview alive', async () => {
+  const frame = page.frames().find((f) => f !== page.mainFrame());
+  await frame.click('#cta');
+  await new Promise((r) => setTimeout(r, 300));
+  const before = await frame.$eval('.count b', (n) => n.textContent);
+  if (!Number(before)) throw new Error(`counter did not increment, it reads ${before}`);
+
+  const [cssTab] = await page.$$('button ::-p-text(CSS)');
+  await cssTab.click();
+  await typeAtEnd('css', '\n.card { outline: 2px solid magenta; }');
+  await new Promise((r) => setTimeout(r, 1800));
+
+  const sameFrame = page.frames().find((f) => f !== page.mainFrame());
+  const after = await sameFrame.$eval('.count b', (n) => n.textContent).catch(() => null);
+  if (after !== before) throw new Error(`preview was rebuilt — counter went ${before} to ${after}`);
+
+  const outline = await sameFrame.$eval('.card', (n) => getComputedStyle(n).outlineColor);
+  if (!outline.includes('255, 0, 255')) throw new Error(`CSS was not applied, outline is ${outline}`);
+});
+
+await step('editing HTML still rebuilds the preview', async () => {
+  const [htmlTab] = await page.$$('button ::-p-text(HTML)');
+  await htmlTab.click();
+  await typeAtEnd('html', '\n<span id="rebuilt"></span>');
+  await new Promise((r) => setTimeout(r, 1800));
+  const frame = page.frames().find((f) => f !== page.mainFrame());
+  await frame.waitForSelector('#rebuilt', { timeout: 5000 });
+  const counter = await frame.$eval('.count b', (n) => n.textContent);
+  if (counter !== '0') throw new Error('preview should have been rebuilt from scratch');
+});
+
 await step('command palette opens and filters', async () => {
   await palette('templ');
   await shot('03-palette');

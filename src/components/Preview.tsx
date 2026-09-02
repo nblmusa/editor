@@ -2,12 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { Monitor, RotateCw, Smartphone, SquareArrowOutUpRight, Tablet } from 'lucide-react';
 import type { Project } from '@/types';
-import { buildSrcDoc, buildStandaloneDoc } from '@/lib/srcdoc';
-import { setPreviewWindow } from '@/lib/frameBridge';
-import { useConsoleStore } from '@/store/useConsoleStore';
+import { buildSrcDoc, buildStandaloneDoc, structuralKey } from '@/lib/srcdoc';
+import { patchPreviewCss, setPreviewWindow } from '@/lib/frameBridge';
+import { useOutputStore } from '@/store/useOutputStore';
 import { IconButton, SegmentedControl } from './ui';
 
-const SANDBOX = 'allow-scripts allow-modals allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads';
+const SANDBOX =
+  'allow-scripts allow-modals allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads';
 
 type DeviceId = 'auto' | 'mobile' | 'tablet';
 
@@ -30,45 +31,57 @@ export function Preview({ project, runToken, autoRun, autoRunDelay, dark, onHotk
   const frame = useRef<HTMLIFrameElement>(null);
   const [device, setDevice] = useState<DeviceId>('auto');
   const [status, setStatus] = useState<'idle' | 'running'>('idle');
-  const pushLog = useConsoleStore((s) => s.push);
-  const clearLogs = useConsoleStore((s) => s.clear);
+
+  const push = useOutputStore((s) => s.push);
+  const recordRequest = useOutputStore((s) => s.recordRequest);
+  const setAudit = useOutputStore((s) => s.setAudit);
+  const clearOutput = useOutputStore((s) => s.clear);
 
   const doc = useMemo(
     () => buildSrcDoc(project, { darkPreview: dark }),
-    // Only the parts that affect rendering.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [project.html, project.css, project.js, project.libraries, project.jsFlavor, dark],
   );
 
-  const render = useCallback(
+  const shape = useMemo(() => structuralKey(project) + String(dark), [project, dark]);
+  const lastShape = useRef<string | null>(null);
+
+  const reload = useCallback(
     (html: string) => {
       const el = frame.current;
       if (!el) return;
-      clearLogs();
+      setPreviewWindow(null);
+      clearOutput();
       setStatus('running');
+      lastShape.current = shape;
       el.srcdoc = html;
     },
-    [clearLogs],
+    [clearOutput, shape],
   );
 
-  // Manual runs (and project switches) render immediately.
+  // Manual runs and project switches always rebuild the document.
   useEffect(() => {
-    render(doc);
+    reload(doc);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runToken]);
 
-  // Live updates are debounced so typing does not thrash the frame.
   const first = useRef(true);
   useEffect(() => {
-    // The run-token effect already renders on mount.
     if (first.current) {
       first.current = false;
       return;
     }
     if (!autoRun) return;
-    const timer = window.setTimeout(() => render(doc), autoRunDelay);
+
+    const timer = window.setTimeout(() => {
+      // Styling on its own can be swapped in place, which preserves scroll
+      // position, form state and any animation already in flight.
+      if (lastShape.current === shape && patchPreviewCss(project.css)) return;
+      reload(doc);
+    }, autoRunDelay);
+
     return () => clearTimeout(timer);
-  }, [doc, autoRun, autoRunDelay, render]);
+  }, [doc, shape, project.css, autoRun, autoRunDelay, reload]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
@@ -78,17 +91,27 @@ export function Preview({ project, runToken, autoRun, autoRunDelay, dark, onHotk
 
       switch (data.type) {
         case 'console':
-          pushLog({ level: data.level, parts: data.parts, stack: data.stack });
+          push({ level: data.level, parts: data.parts, stack: data.stack });
           break;
         case 'clear':
-          clearLogs();
+          clearOutput();
+          break;
+        case 'network':
+          recordRequest(data.entry);
+          break;
+        case 'audit':
+          setAudit(
+            data.ok
+              ? { status: 'done', violations: data.violations, at: Date.now() }
+              : { status: 'failed', message: data.message },
+          );
           break;
         case 'ready':
           setStatus('idle');
           setPreviewWindow(frame.current?.contentWindow ?? null);
           break;
         case 'eval-result':
-          pushLog({ level: data.ok ? 'result' : 'error', parts: data.parts });
+          push({ level: data.ok ? 'result' : 'error', parts: data.parts });
           break;
         case 'hotkey':
           onHotkey(data.key, { shift: Boolean(data.shift), alt: Boolean(data.alt) });
@@ -98,7 +121,7 @@ export function Preview({ project, runToken, autoRun, autoRunDelay, dark, onHotk
 
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [pushLog, clearLogs, onHotkey]);
+  }, [push, clearOutput, recordRequest, setAudit, onHotkey]);
 
   const openInNewTab = () => {
     const blob = new Blob([buildStandaloneDoc(project)], { type: 'text/html' });
@@ -134,7 +157,7 @@ export function Preview({ project, runToken, autoRun, autoRunDelay, dark, onHotk
           />
         </div>
 
-        <IconButton label="Reload preview" onClick={() => render(doc)}>
+        <IconButton label="Reload preview" onClick={() => reload(doc)}>
           <RotateCw size={15} />
         </IconButton>
         <IconButton label="Open in new tab" onClick={openInNewTab}>
@@ -153,8 +176,8 @@ export function Preview({ project, runToken, autoRun, autoRunDelay, dark, onHotk
           title="Preview"
           sandbox={SANDBOX}
           className={clsx(
-            'h-full border-0 bg-white',
-            width ? 'w-full rounded-md shadow-2xl shadow-black/30 ring-1 ring-line' : 'w-full',
+            'h-full w-full border-0 bg-white',
+            width && 'rounded-md shadow-2xl shadow-black/30 ring-1 ring-line',
           )}
           style={width ? { maxWidth: width } : undefined}
         />

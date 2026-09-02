@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import type { PaneId } from '@/types';
 import { useAppStore } from '@/store/useAppStore';
-import { useConsoleStore } from '@/store/useConsoleStore';
+import { useOutputStore } from '@/store/useOutputStore';
 import { useResolvedTheme } from '@/hooks/useTheme';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { buildShareUrl, consumeSharedProject } from '@/lib/share';
@@ -32,7 +32,7 @@ import { downloadHtml, downloadZip } from '@/lib/exporter';
 import { Header } from '@/components/Header';
 import { EditorArea, PANES, useFormatPane } from '@/components/EditorArea';
 import { Preview } from '@/components/Preview';
-import { ConsolePanel } from '@/components/ConsolePanel';
+import { OutputPanel } from '@/components/console/OutputPanel';
 import { SplitPane } from '@/components/SplitPane';
 import { StatusBar } from '@/components/StatusBar';
 import { CommandPalette, type Command } from '@/components/CommandPalette';
@@ -269,7 +269,7 @@ export default function App() {
   );
 
   const effectiveView = isNarrow && view === 'both' ? 'editor' : view;
-  const unreadErrors = useConsoleStore((s) => s.unreadErrors);
+  const unreadErrors = useOutputStore((s) => s.unreadErrors);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -314,7 +314,7 @@ export default function App() {
 
         {consoleOpen && (
           <div style={{ height: consoleHeight }} className="shrink-0">
-            <ConsolePanel
+            <OutputPanel
               onClose={() => toggleConsole(false)}
               onResize={(delta) => setConsoleHeight(consoleHeight + delta)}
             />

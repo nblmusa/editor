@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import type { ViewMode } from '@/types';
 import { useAppStore } from '@/store/useAppStore';
-import { useConsoleStore } from '@/store/useConsoleStore';
+import { useOutputStore } from '@/store/useOutputStore';
 import { buildShareUrl } from '@/lib/share';
 import { downloadHtml, downloadZip, exportJson, importJson } from '@/lib/exporter';
 import { Button, IconButton, Menu, SegmentedControl, toast, Tooltip } from './ui';
@@ -54,7 +54,7 @@ export function Header({ onOpenDialog, onOpenPalette }: Props) {
   const newProject = useAppStore((s) => s.newProject);
   const importProjects = useAppStore((s) => s.importProjects);
 
-  const errors = useConsoleStore((s) => s.unreadErrors);
+  const errors = useOutputStore((s) => s.unreadErrors);
   const [copied, setCopied] = useState(false);
 
   const isSaved = savedProjectId !== null;
